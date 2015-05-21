@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/nlopes/slack"
 )
 
 //
@@ -41,11 +42,11 @@ type WebPlugin interface {
 type Rewarder interface {
 	InitRewarder(*Bot)
 	RegisterBadge(shortName, title, description string)
-	LogEvent(user *User, event string, data interface{}) error
-	FetchEventsSince(user *User, since time.Time, event string, data interface{}) error
-	FetchLastEvent(user *User, event string, data interface{}) error
-	FetchLastNEvents(user *User, num int, event string, data interface{}) error
-	AwardBadge(bot *Bot, user *User, shortName string) error
+	LogEvent(user *slack.User, event string, data interface{}) error
+	FetchEventsSince(user *slack.User, since time.Time, event string, data interface{}) error
+	FetchLastEvent(user *slack.User, event string, data interface{}) error
+	FetchLastNEvents(user *slack.User, num int, event string, data interface{}) error
+	AwardBadge(bot *Bot, user *slack.User, shortName string) error
 }
 
 var registeredPlugins = make([]Plugin, 0)

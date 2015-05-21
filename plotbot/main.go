@@ -2,9 +2,7 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"os"
-	"strconv"
 
 	"github.com/plotly/plotbot"
 	_ "github.com/plotly/plotbot/bugger"
@@ -27,18 +25,7 @@ var configFile = flag.String("config", os.Getenv("HOME")+"/.plotbot", "config fi
 func main() {
 	flag.Parse()
 
-	bot := plotbot.NewHipbot(*configFile)
-
-	var serverConf struct {
-		Server struct {
-			Pidfile string `json:"pid_file"`
-		}
-	}
-
-	bot.LoadConfig(&serverConf)
-	pid := os.Getpid()
-	pidb := []byte(strconv.Itoa(pid))
-	ioutil.WriteFile(serverConf.Server.Pidfile, pidb, 0755)
+	bot := plotbot.New(*configFile)
 
 	bot.Run()
 }

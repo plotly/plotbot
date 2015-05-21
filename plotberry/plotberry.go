@@ -122,14 +122,14 @@ func (plotberry *PlotBerry) launchCounter(statchan chan TotalUsers) {
 	var countDownActive bool
 
 	send := func(msg string) {
-		plotberry.bot.SendToRoom(plotberry.bot.Config.TeamRoom, msg)
+		plotberry.bot.SendToChannel(plotberry.bot.Config.GeneralChannel, msg)
 	}
 
 	doFinale := func(msg string) {
 		send(msg)
 		go func() {
 			time.Sleep(22 * time.Second)
-			plotberry.bot.SendToRoom(plotberry.bot.Config.TeamRoom, "...I like mimosas")
+			plotberry.bot.SendToChannel(plotberry.bot.Config.GeneralChannel, "...I like mimosas")
 		}()
 	}
 
