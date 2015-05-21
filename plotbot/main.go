@@ -12,7 +12,6 @@ import (
 	_ "github.com/plotly/plotbot/hooker"
 	_ "github.com/plotly/plotbot/mooder"
 	_ "github.com/plotly/plotbot/plotberry"
-	_ "github.com/plotly/plotbot/rewarder"
 	_ "github.com/plotly/plotbot/standup"
 	_ "github.com/plotly/plotbot/totw"
 	_ "github.com/plotly/plotbot/web"

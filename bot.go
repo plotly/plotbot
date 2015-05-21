@@ -40,7 +40,6 @@ type Bot struct {
 
 	// Other features
 	WebServer WebServer
-	Rewarder          Rewarder
 	Mood      Mood
 }
 
@@ -85,9 +84,6 @@ func (bot *Bot) Run() {
 			pluginType = pluginType.Elem()
 		}
 		typeList := make([]string, 0)
-		if _, ok := plugin.(Rewarder); ok {
-			typeList = append(typeList, "Rewarder")
-		}
 		if _, ok := plugin.(ChatPlugin); ok {
 			typeList = append(typeList, "ChatPlugin")
 		}
@@ -103,7 +99,6 @@ func (bot *Bot) Run() {
 		enabledPlugins = append(enabledPlugins, strings.Replace(pluginType.String(), ".", "_", -1))
 	}
 
-	InitRewarder(bot)
 	InitChatPlugins(bot)
 	InitWebServer(bot, enabledPlugins)
 	InitWebPlugins(bot)
