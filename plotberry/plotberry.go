@@ -15,7 +15,7 @@ type PlotBerry struct {
 	bot        *plotbot.Bot
 	totalUsers int
 	pingTime   time.Duration
-	era        int
+	eraLength  int
 	endpoint   string
 }
 
@@ -24,9 +24,9 @@ type TotalUsers struct {
 }
 
 type PlotberryConf struct {
-	Era      int
-	PingTime int
-	EndPoint string
+	EraLength int
+	PingTime  int
+	EndPoint  string
 }
 
 func init() {
@@ -46,12 +46,12 @@ func (plotberry *PlotBerry) InitChatPlugin(bot *plotbot.Bot) {
 
 	plotberry.bot = bot
 	plotberry.pingTime = time.Duration(conf.Plotberry.PingTime) * time.Second
-	plotberry.era = conf.Plotberry.Era
+	plotberry.eraLength = conf.Plotberry.EraLength
 	plotberry.endpoint = conf.Plotberry.EndPoint
 
-	// if plotberry.era is 0 we will get a divide by zero error - lets abort first
-	if plotberry.era == 0 {
-		log.Fatal("Plotberry.era may not be zero (divide by zero error), please set the configuration")
+	// if plotberry.eraLength is 0 we will get a divide by zero error - lets abort first
+	if plotberry.eraLength == 0 {
+		log.Fatal("Plotberry.eraLength may not be zero (divide by zero error), please set the configuration")
 		return
 	}
 
@@ -136,7 +136,7 @@ func (plotberry *PlotBerry) launchCounter(statchan chan TotalUsers) {
 	for data := range statchan {
 
 		totalUsers := data.Plotberries
-		untilNext := plotberry.era - totalUsers%plotberry.era
+		untilNext := plotberry.eraLength - totalUsers%plotberry.eraLength
 		nextEra := untilNext + totalUsers
 
 		// we have already seen this count
@@ -173,7 +173,7 @@ func (plotberry *PlotBerry) launchCounter(statchan chan TotalUsers) {
 			send(fmt.Sprintf("%d user until %d.\nYOU'RE ALL MAGIC!", untilNext, nextEra))
 
 			// use plotberry era as untilNext will == plotbot.era when totalUsers mod era == 0
-		case plotberry.era:
+		case plotberry.eraLength:
 			doFinale(fmt.Sprintf("@all !!!\n We're at %d user signups!!!!! Whup Whup - Party for me this weekend", totalUsers))
 			countDownActive = false
 		default:
