@@ -3,23 +3,30 @@ package plotberry
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/plotly/plotbot"
 	"io/ioutil"
 	"log"
-	"math"
 	"net/http"
 	"time"
+
+	"github.com/plotly/plotbot"
 )
 
 type PlotBerry struct {
 	bot        *plotbot.Bot
 	totalUsers int
 	pingTime   time.Duration
-	celebrated bool
+	eraLength  int
+	endpoint   string
 }
 
 type TotalUsers struct {
 	Plotberries int `json:"plotberries"`
+}
+
+type PlotberryConf struct {
+	EraLength int
+	PingTime  int
+	EndPoint  string
 }
 
 func init() {
@@ -28,10 +35,25 @@ func init() {
 
 func (plotberry *PlotBerry) InitChatPlugin(bot *plotbot.Bot) {
 
+	var conf struct {
+		Plotberry PlotberryConf
+	}
+	err := bot.LoadConfig(&conf)
+	if err != nil {
+		log.Fatalln("Error loading PlotBerry config section: ", err)
+		return
+	}
+
 	plotberry.bot = bot
-	plotberry.celebrated = true
-	plotberry.pingTime = 10 * time.Second
-	plotberry.totalUsers = 100001
+	plotberry.pingTime = time.Duration(conf.Plotberry.PingTime) * time.Second
+	plotberry.eraLength = conf.Plotberry.EraLength
+	plotberry.endpoint = conf.Plotberry.EndPoint
+
+	// if plotberry.eraLength is 0 we will get a divide by zero error - lets abort first
+	if plotberry.eraLength == 0 {
+		log.Fatal("Plotberry.eraLength may not be zero (divide by zero error), please set the configuration")
+		return
+	}
 
 	statchan := make(chan TotalUsers, 100)
 
@@ -50,15 +72,15 @@ func (plotberry *PlotBerry) ChatHandler(conv *plotbot.Conversation, msg *plotbot
 	return
 }
 
-func getplotberry () (*TotalUsers, error) {
+func getplotberry(endpoint string) (*TotalUsers, error) {
 
 	var data TotalUsers
 
-	resp, err := http.Get("https://plot.ly/v0/plotberries")
+	resp, err := http.Get(endpoint)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -79,7 +101,7 @@ func (plotberry *PlotBerry) launchWatcher(statchan chan TotalUsers) {
 	for {
 		time.Sleep(plotberry.pingTime)
 
-		data, err := getplotberry()
+		data, err := getplotberry(plotberry.endpoint)
 
 		if err != nil {
 			log.Print(err)
@@ -96,52 +118,73 @@ func (plotberry *PlotBerry) launchWatcher(statchan chan TotalUsers) {
 
 func (plotberry *PlotBerry) launchCounter(statchan chan TotalUsers) {
 
-	finalcountdown := 100000
+	var lastCount int
+	var countDownActive bool
+
+	send := func(msg string) {
+		plotberry.bot.SendToRoom(plotberry.bot.Config.TeamRoom, msg)
+	}
+
+	doFinale := func(msg string) {
+		send(msg)
+		go func() {
+			time.Sleep(22 * time.Second)
+			plotberry.bot.SendToRoom(plotberry.bot.Config.TeamRoom, "...I like mimosas")
+		}()
+	}
 
 	for data := range statchan {
 
 		totalUsers := data.Plotberries
+		untilNext := plotberry.eraLength - totalUsers%plotberry.eraLength
+		nextEra := untilNext + totalUsers
 
-		mod := math.Mod(float64(totalUsers), 50) == 0
-		rem := finalcountdown - totalUsers
-
-		if plotberry.celebrated {
+		// we have already seen this count
+		if lastCount == untilNext {
 			continue
 		}
 
-		if mod || (rem <= 10) {
-			var msg string
-
-			if rem == 10 {
-				msg = fmt.Sprintf("@all %d users till the finalcountdown!", rem)
-			} else if rem == 9 {
-				msg = fmt.Sprintf("%d users!", rem)
-			} else if rem == 8 {
-				msg = fmt.Sprintf("and %d", rem)
-			} else if rem == 7 {
-				msg = fmt.Sprintf("we're at %d users. %d users till Mimosa time!\n", totalUsers, rem)
-			} else if rem == 6 {
-				msg = fmt.Sprintf("%d...", rem)
-			} else if rem == 5 {
-				msg = fmt.Sprintf("@all %d users\n I'm a freaky proud robot!", rem)
-			} else if rem == 4 {
-				msg = fmt.Sprintf("%d users till finalcountdown!", rem)
-			} else if rem == 3 {
-				msg = fmt.Sprintf("%d... \n", rem)
-			} else if rem == 2 {
-				msg = fmt.Sprintf("%d more! humpa humpa\n", rem)
-			} else if rem == 1 {
-				plotberry.bot.SendToRoom(plotberry.bot.Config.TeamRoom, fmt.Sprintf("%d users until 100000.\nYOU'RE ALL MAGIC!", rem))
-				msg = "https://31.media.tumblr.com/3b74abfa367a3ed9a2cd753cd9018baa/tumblr_miul04oqog1qkp8xio1_400.gif"
-			} else if rem <= 0 {
-				msg = fmt.Sprintf("@all FINALCOUNTDOWN!!!\n We're at %d user signups!!!!! My human compatriots, taking an idea to a product with 100,000 users is an achievement few will experience in their life times. Reflect, humans, on your hard work and celebrate this success. You deserve it, and remember, Plot On!", totalUsers)
-				plotberry.celebrated = true
-			} else {
-				msg = fmt.Sprintf("We are at %d total user signups!", totalUsers)
-			}
-
-			plotberry.bot.SendToRoom(plotberry.bot.Config.TeamRoom, msg)
+		if untilNext <= 10 {
+			countDownActive = true
 		}
+
+		switch untilNext {
+
+		case 10:
+			send(fmt.Sprintf("@all %d users till %d!", untilNext, nextEra))
+		case 9:
+			send(fmt.Sprintf("We're at %d users!", totalUsers))
+		case 8:
+			send(fmt.Sprintf("%d...", totalUsers))
+		case 7:
+			send(fmt.Sprintf("%d...\n", totalUsers))
+		case 6:
+			send(fmt.Sprintf("%d more to go", untilNext))
+		case 5:
+			send(fmt.Sprintf("@all %d users!\n I'm a freaky proud robot!", totalUsers))
+		case 4:
+			send(fmt.Sprintf("%d users till %d!", untilNext, nextEra))
+		case 3:
+			send(fmt.Sprintf("%d... \n", untilNext))
+		case 2:
+			send(fmt.Sprintf("%d more! swing badda badda badda badda badda.\n", untilNext))
+		case 1:
+			send("https://31.media.tumblr.com/3b74abfa367a3ed9a2cd753cd9018baa/tumblr_miul04oqog1qkp8xio1_400.gif")
+			send(fmt.Sprintf("%d user until %d.\nYOU'RE ALL MAGIC!", untilNext, nextEra))
+
+			// use plotberry era as untilNext will == plotbot.era when totalUsers mod era == 0
+		case plotberry.eraLength:
+			doFinale(fmt.Sprintf("@all !!!\n We're at %d user signups!!!!! Whup Whup - Party for me this weekend", totalUsers))
+			countDownActive = false
+		default:
+			// too many users signed on within the ping time and we blew past our era. Play the finale
+			if countDownActive {
+				doFinale(fmt.Sprintf("@all !!!\n We're at %d user signups!!!!! Whup Whup - Party for me this weekend", totalUsers))
+				countDownActive = false
+			}
+		}
+
+		lastCount = untilNext
 	}
 
 }
