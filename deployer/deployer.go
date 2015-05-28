@@ -61,18 +61,13 @@ func (dep *Deployer) InitChatPlugin(bot *plotbot.Bot) {
 	go dep.pubsubForwardReply()
 
 	bot.ListenFor(&plotbot.Conversation{
-		HandlerFunc: dep.ChatHandler,
+		HandlerFunc:    dep.ChatHandler,
+		MentionsMeOnly: true,
 	})
 }
 
 func (dep *Deployer) loadInternalAPI() {
 	dep.internal = internal.New(dep.bot.LoadConfig)
-}
-
-func (dep *Deployer) ChatConfig() *plotbot.ChatPluginConfig {
-	return &plotbot.ChatPluginConfig{
-		OnlyMentions: true,
-	}
 }
 
 /**

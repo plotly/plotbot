@@ -1,7 +1,6 @@
 package plotbot
 
 import "github.com/gorilla/mux"
-	"github.com/nlopes/slack"
 
 //
 // Bot plugins
@@ -10,17 +9,8 @@ import "github.com/gorilla/mux"
 type Plugin interface{}
 
 type ChatPlugin interface {
-	// Handle handles incoming messages matching the constraints
-	// from ChatConfig.
+	// InitChatPlugin registers Conversations to be listened to.
 	InitChatPlugin(*Bot)
-}
-
-type ChatConfig struct {
-	// Whether to handle the bot's own messages
-	EchoMessages bool
-
-	// Whether to handle messages that are not destined to me
-	OnlyMentions bool
 }
 
 type WebServer interface {
@@ -41,7 +31,7 @@ func RegisterPlugin(plugin Plugin) {
 	registeredPlugins = append(registeredPlugins, plugin)
 }
 
-func InitChatPlugins(bot *Bot) {
+func initChatPlugins(bot *Bot) {
 	for _, plugin := range registeredPlugins {
 		chatPlugin, ok := plugin.(ChatPlugin)
 		if ok {
@@ -50,7 +40,7 @@ func InitChatPlugins(bot *Bot) {
 	}
 }
 
-func InitWebServer(bot *Bot, enabledPlugins []string) {
+func initWebServer(bot *Bot, enabledPlugins []string) {
 	for _, plugin := range registeredPlugins {
 		webServer, ok := plugin.(WebServer)
 		if ok {
@@ -61,7 +51,7 @@ func InitWebServer(bot *Bot, enabledPlugins []string) {
 	}
 }
 
-func InitWebPlugins(bot *Bot) {
+func initWebPlugins(bot *Bot) {
 	if bot.WebServer == nil {
 		return
 	}
