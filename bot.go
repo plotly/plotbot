@@ -90,6 +90,9 @@ func (bot *Bot) Run() {
 		if _, ok := plugin.(WebServer); ok {
 			typeList = append(typeList, "WebServer")
 		}
+		if _, ok := plugin.(WebServerAuth); ok {
+			typeList = append(typeList, "WebServerAuth")
+		}
 		if _, ok := plugin.(WebPlugin); ok {
 			typeList = append(typeList, "WebPlugin")
 		}
@@ -104,7 +107,7 @@ func (bot *Bot) Run() {
 	initWebPlugins(bot)
 
 	if bot.WebServer != nil {
-		go bot.WebServer.ServeWebRequests()
+		go bot.WebServer.RunServer()
 	}
 
 	for {

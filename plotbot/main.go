@@ -16,6 +16,7 @@ import (
 	_ "github.com/plotly/plotbot/totw"
 	_ "github.com/plotly/plotbot/vote"
 	_ "github.com/plotly/plotbot/web"
+	_ "github.com/plotly/plotbot/webauth"
 	_ "github.com/plotly/plotbot/webutils"
 	_ "github.com/plotly/plotbot/wicked"
 )
