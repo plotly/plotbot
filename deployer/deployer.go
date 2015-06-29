@@ -41,7 +41,7 @@ func init() {
 	plotbot.RegisterPlugin(&Deployer{})
 }
 
-func (dep *Deployer) InitChatPlugin(bot *plotbot.Bot) {
+func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	var conf struct {
 		Deployer DeployerConfig
 	}

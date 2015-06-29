@@ -33,7 +33,7 @@ func init() {
 	plotbot.RegisterPlugin(&PlotBerry{})
 }
 
-func (plotberry *PlotBerry) InitChatPlugin(bot *plotbot.Bot) {
+func (plotberry *PlotBerry) InitPlugin(bot *plotbot.Bot) {
 
 	var conf struct {
 		Plotberry PlotberryConf

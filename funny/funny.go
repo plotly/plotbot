@@ -14,7 +14,7 @@ func init() {
 	plotbot.RegisterPlugin(&Funny{})
 }
 
-func (funny *Funny) InitChatPlugin(bot *plotbot.Bot) {
+func (funny *Funny) InitPlugin(bot *plotbot.Bot) {
 
 	plotbot.RegisterStringList("forcePush", []string{
 		"http://www.gifcrap.com/g2data/albums/TV/Star%20Wars%20-%20Force%20Push%20-%20Goats%20fall%20over.gif",

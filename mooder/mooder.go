@@ -15,7 +15,7 @@ func init() {
 	plotbot.RegisterPlugin(&Mooder{})
 }
 
-func (mooder *Mooder) InitChatPlugin(bot *plotbot.Bot) {
+func (mooder *Mooder) InitPlugin(bot *plotbot.Bot) {
 	mooder.bot = bot
 	go mooder.SetupMoodChanger()
 }

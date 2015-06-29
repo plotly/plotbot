@@ -32,7 +32,7 @@ func init() {
 	plotbot.RegisterPlugin(&Wicked{})
 }
 
-func (wicked *Wicked) InitChatPlugin(bot *plotbot.Bot) {
+func (wicked *Wicked) InitPlugin(bot *plotbot.Bot) {
 	wicked.bot = bot
 	wicked.meetings = make(map[string]*Meeting)
 

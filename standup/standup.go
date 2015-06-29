@@ -23,7 +23,7 @@ func init() {
 	plotbot.RegisterPlugin(&Standup{})
 }
 
-func (standup *Standup) InitChatPlugin(bot *plotbot.Bot) {
+func (standup *Standup) InitPlugin(bot *plotbot.Bot) {
 	standup.bot = bot
 	standup.sectionUpdates = make(chan sectionUpdate, 15)
 

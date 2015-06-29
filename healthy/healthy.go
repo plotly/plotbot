@@ -18,7 +18,7 @@ func init() {
 	plotbot.RegisterPlugin(&Healthy{})
 }
 
-func (healthy *Healthy) InitChatPlugin(bot *plotbot.Bot) {
+func (healthy *Healthy) InitPlugin(bot *plotbot.Bot) {
 	var conf struct {
 		HealthCheck struct {
 			Urls []string

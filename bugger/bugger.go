@@ -52,7 +52,7 @@ func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
 	return
 }
 
-func (bugger *Bugger) InitChatPlugin(bot *plotbot.Bot) {
+func (bugger *Bugger) InitPlugin(bot *plotbot.Bot) {
 
 	/*
 	 * Get an array of issues matching Filters
