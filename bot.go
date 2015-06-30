@@ -21,7 +21,7 @@ type Bot struct {
 	Config     SlackConfig
 
 	// Slack connectivity
-	api      *slack.Slack
+	Slack    *slack.Slack
 	ws       *slack.SlackWS
 	Users    map[string]slack.User
 	Channels map[string]slack.Channel
@@ -196,7 +196,7 @@ func (bot *Bot) ReplyPrivately(msg *Message, reply string) {
 
 func (bot *Bot) Notify(room, color, format, msg string, notify bool) error {
 	log.Println("DEPRECATED. Please use the Slack API with .PostMessage")
-	// bot.api.PostMessage(room, msg, slack.PostMessageParameters{
+	// bot.Slack.PostMessage(room, msg, slack.PostMessageParameters{
 	// 	Attachments: []slack.Attachment{
 	// 		{
 	// 			Color: color,
@@ -230,16 +230,16 @@ func (bot *Bot) connectClient() (err error) {
 		resource = "bot"
 	}
 
-	bot.api = slack.New(bot.Config.ApiToken)
-	//bot.api.SetDebug(true)
+	bot.Slack = slack.New(bot.Config.ApiToken)
+	//bot.Slack.SetDebug(true)
 
-	ws, err := bot.api.StartRTM("", "http://safeidentity.slack.com")
+	ws, err := bot.Slack.StartRTM("", "http://safeidentity.slack.com")
 	if err != nil {
 		return err
 	}
 	bot.ws = ws
 
-	infos := bot.api.GetInfo()
+	infos := bot.Slack.GetInfo()
 	bot.Myself = infos.User
 	bot.cacheUsers(infos.Users)
 	bot.cacheChannels(infos.Channels, infos.Groups)
@@ -247,7 +247,7 @@ func (bot *Bot) connectClient() (err error) {
 	for _, channelName := range bot.Config.JoinChannels {
 		channel := bot.GetChannelByName(channelName)
 		if channel != nil {
-			bot.api.JoinChannel(channel.Id)
+			bot.Slack.JoinChannel(channel.Id)
 		}
 	}
 
