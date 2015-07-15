@@ -48,7 +48,7 @@ func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
 	issueChan := make(chan github.IssueItem, 1)
 	go bugger.ghclient.DoEventQuery(issueList, repo, issueChan)
 
-	reporter.Git2Hip = bugger.ghclient.Conf.Github2Hipchat
+	reporter.Git2Chat = bugger.ghclient.Conf.Github2Chat
 
 	for issue := range issueChan {
 		reporter.addBug(issue)

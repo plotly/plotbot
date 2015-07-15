@@ -9,7 +9,7 @@ import (
 
 type bugReporter struct {
 	bugs    []github.IssueItem
-	Git2Hip map[string]string
+	Git2Chat map[string]string
 }
 
 func (r *bugReporter) addBug(issue github.IssueItem) {
