@@ -137,8 +137,8 @@ func (mw *OAuthMiddleware) doOAuth2Roundtrip(w http.ResponseWriter, r *http.Requ
 	}
 
 	expectedURL := fmt.Sprintf("https://%s.slack.com/", mw.bot.Config.TeamDomain)
-	if resp.URL != expectedURL {
-		return nil, fmt.Errorf("Authenticated for wrong domain: %q != %q", resp.URL, expectedURL)
+	if resp.Url != expectedURL {
+		return nil, fmt.Errorf("Authenticated for wrong domain: %q != %q", resp.Url, expectedURL)
 	}
 
 	return mw.bot.GetUser(resp.UserId), nil
