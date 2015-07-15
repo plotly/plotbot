@@ -150,13 +150,16 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.Config.Nickname))
 		bot.Notify(dep.config.AnnounceRoom, "purple", "text", fmt.Sprintf("%s has locked deployment", dep.lockedBy), true)
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
-		mention := dep.bot.Config.Nickname
-		conv.Reply(msg, fmt.Sprintf(`Usage: %s, [please|insert reverence] deploy [<branch-name>] to <environment> [using <deployment-branch>][, tags: <ansible-playbook tags>, ..., ...]
-examples: %s, please deploy to prod
-%s, deploy thing-to-test to stage
-%s, deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
-other commands: %s, what's in the pipe? - show what's waiting to be deployed to prod
-%s, lock deployment - prevent deployment until it's unlocked`, mention, mention, mention, mention, mention, mention))
+		mention := dep.bot.MentionPrefix
+		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s, [please|insert reverence] deploy [<branch-name>] to <environment> [using <deployment-branch>][, tags: <ansible-playbook tags>, ..., ...]
+*Examples:*
+• %s please deploy to prod
+• %s deploy thing-to-test to stage
+• %s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
+*Other commands:*
+• %s, what's in the pipe? - show what's waiting to be deployed to prod
+• %s lock deployment - prevent deployment until it's unlocked
+• %s cancel deploy - cancel the currently running deployment`, mention, mention, mention, mention, mention, mention, mention))
 	}
 }
 
