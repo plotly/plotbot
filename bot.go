@@ -69,7 +69,7 @@ func (bot *Bot) Run() {
 
 	db, err := leveldb.OpenFile(bot.LevelConfig.Path, nil)
 	if err != nil {
-		log.Fatal("Could not initialize Leveldb key/value store")
+		log.Fatal("Could not initialize Leveldb key/value store:", err)
 	}
 	defer func() {
 		log.Fatal("Database is closing")
