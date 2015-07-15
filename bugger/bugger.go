@@ -95,7 +95,7 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 		} else {
 			report = "bug count"
 		}
-		mention := bugger.bot.Config.Nickname
+		mention := bugger.bot.MentionPrefix
 
 		conv.Reply(msg, fmt.Sprintf(
 			`*Usage:* %s [give me a | insert demand]  <%s>  [from the | syntax filler] [last | past] [n] [days | weeks]
