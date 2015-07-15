@@ -59,7 +59,7 @@ func (funny *Funny) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message
 		if msg.Contains("you're funny") {
 
 			if bot.Mood == plotbot.Happy {
-				conv.Reply(msg, "/me blushes")
+				conv.Reply(msg, "_blush_")
 			} else {
 				conv.Reply(msg, "here's another one")
 				conv.Reply(msg, plotbot.RandomString("robot jokes"))
@@ -175,7 +175,7 @@ func (funny *Funny) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message
 
 	} else if msg.Text == "ls" {
 
-		conv.Reply(msg, "/code deploy/      Contributors-Guide/ image_server/     sheep_porn/     streambed/\nstreamhead/  README.md")
+		conv.Reply(msg, "```deploy/      Contributors-Guide/ image_server/     sheep_porn/     streambed/\nstreamhead/  README.md```")
 
 	} else if msg.ContainsAny([]string{"that's really cool", "that is really cool", "really happy"}) {
 
