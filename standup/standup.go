@@ -53,9 +53,9 @@ func (standup *Standup) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Mes
 				"I am the eggman and the walrus ate your report - Fzaow!"))
 		} else {
 			if msg.Contains(" my ") {
-				conv.Reply(msg, "/quote "+smap.filterByEmail(msg.FromUser.Profile.Email).String())
+				conv.Reply(msg, "```"+smap.filterByEmail(msg.FromUser.Profile.Email).String() + "```")
 			} else {
-				conv.Reply(msg, "/quote "+smap.String())
+				conv.Reply(msg, "```"+smap.String()+"```")
 			}
 		}
 	}
