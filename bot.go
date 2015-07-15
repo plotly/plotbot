@@ -319,8 +319,6 @@ func (bot *Bot) cacheChannels() error {
 			IsChannel:   false,
 			Creator:     group.Creator,
 			IsArchived:  group.IsArchived,
-			IsGeneral:   group.IsGeneral,
-			IsGroup:     true,
 			Members:     group.Members,
 			Topic:       group.Topic,
 			Purpose:     group.Purpose,
@@ -354,7 +352,7 @@ func (bot *Bot) loadBaseConfig() {
 	}
 	err := bot.LoadConfig(&config1)
 	if err != nil {
-		log.Fatalln("Error loading Hipchat config section: ", err)
+		log.Fatalln("Error loading Slack config section: ", err)
 	} else {
 		bot.Config = config1.Slack
 	}
@@ -462,7 +460,7 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 		fmt.Printf("Message: %v\n", ev)
 		msg := &Message{
 			Msg:        &ev.Msg,
-			SubMessage: &ev.SubMessage,
+			SubMessage: ev.SubMessage,
 		}
 
 		// TODO: handle messages that update the channels, groups and users.. so we keep
