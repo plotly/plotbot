@@ -98,11 +98,12 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 		mention := bugger.bot.Config.Nickname
 
 		conv.Reply(msg, fmt.Sprintf(
-			`Usage: %s, [give me a | insert demand]  <%s>  [from the | syntax filler] [last | past] [n] [days | weeks]
-examples: %s, please give me a %s over the last 5 days
-%s, produce a %s   (7 day default)
-%s, I want a %s from the past 2 weeks
-%s, %s from the past week`, mention, report, mention, report, mention, report, mention, report, mention, report))
+			`*Usage:* %s [give me a | insert demand]  <%s>  [from the | syntax filler] [last | past] [n] [days | weeks]
+*Examples:*
+• %s please give me a %s over the last 5 days
+• %s produce a %s   (7 day default)
+• %s I want a %s from the past 2 weeks
+• %s %s from the past week`, mention, report, mention, report, mention, report, mention, report, mention, report))
 
 	} else if msg.Contains("bug report") {
 
