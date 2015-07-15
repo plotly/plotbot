@@ -10,11 +10,11 @@ type SlackConfig struct {
 	Password       string
 	Resource       string
 	Nickname       string
-	GeneralChannel string   `json:"general_channel"`
-	TeamDomain     string   `json:"team_domain"`
-	TeamID         string   `json:"team_id"`
-	ApiToken       string   `json:"api_token"`
-	WebBaseURL     string   `json:"web_base_url"`
+	GeneralChannel string `json:"general_channel"`
+	TeamDomain     string `json:"team_domain"`
+	TeamID         string `json:"team_id"`
+	ApiToken       string `json:"api_token"`
+	WebBaseURL     string `json:"web_base_url"`
 	Debug          bool
 }
 

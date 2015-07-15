@@ -16,7 +16,7 @@ func NextWeekdayTime(w time.Weekday, hour, min int) (time.Time, time.Duration) {
 	return res, res.Sub(t)
 }
 
-func AfterNextWeekdayTime(w time.Weekday, hour, min int) (<-chan time.Time) {
+func AfterNextWeekdayTime(w time.Weekday, hour, min int) <-chan time.Time {
 	_, duration := NextWeekdayTime(w, hour, min)
 	return time.After(duration)
 }

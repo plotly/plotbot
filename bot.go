@@ -33,7 +33,7 @@ type Bot struct {
 	delConversationCh chan *Conversation
 	disconnected      chan bool
 	replySink         chan *BotReply
-        MentionPrefix     string
+	MentionPrefix     string
 
 	// Storage
 	LevelDBConfig LevelDBConfig
@@ -120,7 +120,7 @@ func (bot *Bot) Run() {
 			continue
 		}
 
-                bot.MentionPrefix = fmt.Sprintf("@%s:", bot.Myself.Name)
+		bot.MentionPrefix = fmt.Sprintf("@%s:", bot.Myself.Name)
 
 		bot.setupHandlers()
 
