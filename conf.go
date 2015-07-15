@@ -10,7 +10,6 @@ type SlackConfig struct {
 	Password       string
 	Resource       string
 	Nickname       string
-	JoinChannels   []string `json:"join_channels"`
 	GeneralChannel string   `json:"general_channel"`
 	TeamDomain     string   `json:"team_domain"`
 	TeamID         string   `json:"team_id"`

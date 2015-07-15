@@ -244,13 +244,6 @@ func (bot *Bot) connectClient() (err error) {
 	bot.cacheUsers(infos.Users)
 	bot.cacheChannels(infos.Channels, infos.Groups)
 
-	for _, channelName := range bot.Config.JoinChannels {
-		channel := bot.GetChannelByName(channelName)
-		if channel != nil {
-			bot.Slack.JoinChannel(channel.Id)
-		}
-	}
-
 	return
 }
 
