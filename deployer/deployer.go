@@ -95,11 +95,6 @@ var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+
 func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
 	bot := conv.Bot
 
-	// Discard non "mention_name, " prefixed messages
-	if !strings.HasPrefix(msg.Text, fmt.Sprintf("%s, ", bot.Config.Nickname)) {
-		return
-	}
-
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
 		if dep.lockedBy != "" {
 			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  Unlock with '%s, unlock deployment' if they're OK with it.", dep.lockedBy, dep.bot.Config.Nickname))
