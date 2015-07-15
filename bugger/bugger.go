@@ -23,6 +23,11 @@ type Bugger struct {
 
 func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
 
+        if len(bugger.ghclient.Conf.Repos) == 0 {
+                log.Println("No repos configured - can't produce a bug report")
+                return
+        }
+
 	repo := bugger.ghclient.Conf.Repos[0]
 
 	query := github.SearchQuery{
