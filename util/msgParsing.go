@@ -10,7 +10,7 @@ func GetDaysFromQuery(text string) int {
 	re := regexp.MustCompile(".*(?:last|past|this) (\\d+)?\\s?(day|week).*")
 	hits := re.FindStringSubmatch(text)
 
-	days := 0
+	days := 7
 	var weeks int
 	var err error
 

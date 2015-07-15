@@ -14,7 +14,7 @@ func init() {
 	plotbot.RegisterPlugin(&Funny{})
 }
 
-func (funny *Funny) InitChatPlugin(bot *plotbot.Bot) {
+func (funny *Funny) InitPlugin(bot *plotbot.Bot) {
 
 	plotbot.RegisterStringList("forcePush", []string{
 		"http://www.gifcrap.com/g2data/albums/TV/Star%20Wars%20-%20Force%20Push%20-%20Goats%20fall%20over.gif",
@@ -59,7 +59,7 @@ func (funny *Funny) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message
 		if msg.Contains("you're funny") {
 
 			if bot.Mood == plotbot.Happy {
-				conv.Reply(msg, "/me blushes")
+				conv.Reply(msg, "_blush_")
 			} else {
 				conv.Reply(msg, "here's another one")
 				conv.Reply(msg, plotbot.RandomString("robot jokes"))
@@ -72,16 +72,12 @@ func (funny *Funny) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message
 		} else if msg.ContainsAny([]string{"thanks", "thank you", "thx", "thnks"}) {
 			conv.Reply(msg, bot.WithMood("my pleasure", "any time, just ask, I'm here for you, ffiieeewww!get a life"))
 
-			if bot.Rewarder != nil {
-				fmt.Println("Ok, in here")
-				bot.Rewarder.LogEvent(msg.FromUser, "thanks", nil)
-			}
 		} else if msg.Contains("how are you") && msg.MentionsMe {
 			conv.ReplyMention(msg, bot.WithMood("good, and you ?", "I'm wild today!! wadabout you ?"))
 			bot.ListenFor(&plotbot.Conversation{
 				ListenDuration: 60 * time.Second,
 				WithUser:       msg.FromUser,
-				InRoom:         msg.FromRoom,
+				InChannel:      msg.FromChannel,
 				MentionsMeOnly: true,
 				HandlerFunc: func(conv *plotbot.Conversation, msg *plotbot.Message) {
 					conv.ReplyMention(msg, bot.WithMood("glad to hear it!", "zwweeeeeeeeet !"))
@@ -177,9 +173,9 @@ func (funny *Funny) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message
 		conv.Reply(msg, "https://i.chzbgr.com/maxW500/8296294144/h7AC1001C.gif")
 		return
 
-	} else if msg.Body == "ls" {
+	} else if msg.Text == "ls" {
 
-		conv.Reply(msg, "/code deploy/      Contributors-Guide/ image_server/     sheep_porn/     streambed/\nstreamhead/  README.md")
+		conv.Reply(msg, "```deploy/      Contributors-Guide/ image_server/     sheep_porn/     streambed/\nstreamhead/  README.md```")
 
 	} else if msg.ContainsAny([]string{"that's really cool", "that is really cool", "really happy"}) {
 

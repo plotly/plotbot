@@ -23,6 +23,11 @@ type Bugger struct {
 
 func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
 
+        if len(bugger.ghclient.Conf.Repos) == 0 {
+                log.Println("No repos configured - can't produce a bug report")
+                return
+        }
+
 	repo := bugger.ghclient.Conf.Repos[0]
 
 	query := github.SearchQuery{
@@ -43,7 +48,7 @@ func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
 	issueChan := make(chan github.IssueItem, 1)
 	go bugger.ghclient.DoEventQuery(issueList, repo, issueChan)
 
-	reporter.Git2Hip = bugger.ghclient.Conf.Github2Hipchat
+	reporter.Git2Chat = bugger.ghclient.Conf.Github2Chat
 
 	for issue := range issueChan {
 		reporter.addBug(issue)
@@ -52,7 +57,7 @@ func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
 	return
 }
 
-func (bugger *Bugger) InitChatPlugin(bot *plotbot.Bot) {
+func (bugger *Bugger) InitPlugin(bot *plotbot.Bot) {
 
 	/*
 	 * Get an array of issues matching Filters
@@ -90,18 +95,19 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 		} else {
 			report = "bug count"
 		}
-		mention := bugger.bot.Config.Mention
+		mention := bugger.bot.MentionPrefix
 
 		conv.Reply(msg, fmt.Sprintf(
-			`Usage: %s, [give me a | insert demand]  <%s>  [from the | syntax filler] [last | past] [n] [days | weeks]
-examples: %s, please give me a %s over the last 5 days
-%s, produce a %s   (7 day default)
-%s, I want a %s from the past 2 weeks
-%s, %s from the past week`, mention, report, mention, report, mention, report, mention, report, mention, report))
+			`*Usage:* %s [give me a | insert demand]  <%s>  [from the | syntax filler] [last | past] [n] [days | weeks]
+*Examples:*
+• %s please give me a %s over the last 5 days
+• %s produce a %s   (7 day default)
+• %s I want a %s from the past 2 weeks
+• %s %s from the past week`, mention, report, mention, report, mention, report, mention, report, mention, report))
 
 	} else if msg.Contains("bug report") {
 
-		days := util.GetDaysFromQuery(msg.Body)
+		days := util.GetDaysFromQuery(msg.Text)
 		bugger.messageReport(days, msg, conv, func() string {
 			reporter := bugger.makeBugReporter(days)
 			return reporter.printReport(days)
@@ -109,7 +115,7 @@ examples: %s, please give me a %s over the last 5 days
 
 	} else if msg.Contains("bug count") {
 
-		days := util.GetDaysFromQuery(msg.Body)
+		days := util.GetDaysFromQuery(msg.Text)
 		bugger.messageReport(days, msg, conv, func() string {
 			reporter := bugger.makeBugReporter(days)
 			return reporter.printCount(days)

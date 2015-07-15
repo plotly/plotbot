@@ -1,9 +1,12 @@
 package plotbot
 
 import (
-	"time"
+	"log"
+	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	"github.com/nlopes/slack"
 )
 
 //
@@ -12,40 +15,34 @@ import (
 
 type Plugin interface{}
 
-type ChatPlugin interface {
-	// Handle handles incoming messages matching the constraints
-	// from ChatConfig.
-	InitChatPlugin(*Bot)
-}
-
-type ChatConfig struct {
-	// Whether to handle the bot's own messages
-	EchoMessages bool
-
-	// Whether to handle messages that are not destined to me
-	OnlyMentions bool
+type PluginInitializer interface {
+	InitPlugin(*Bot)
 }
 
 type WebServer interface {
+	// Used internally by the `slick` library.
 	InitWebServer(*Bot, []string)
-	ServeWebRequests()
+	RunServer()
+
+	// Used by an Auth provider.
+	SetAuthMiddleware(func(http.Handler) http.Handler)
+	SetAuthenticatedUserFunc(func(req *http.Request) (*slack.User, error))
+
+	// Can be called by any plugins.
 	PrivateRouter() *mux.Router
 	PublicRouter() *mux.Router
+	GetSession(*http.Request) *sessions.Session
+	AuthenticatedUser(*http.Request) (*slack.User, error)
 }
 
 // WebPlugin initializes plugins with a `Bot` instance, a `privateRouter` and a `publicRouter`. All URLs handled by the `publicRouter` must start with `/public/`.
 type WebPlugin interface {
-	InitWebPlugin(*Bot, *mux.Router, *mux.Router)
+	InitWebPlugin(bot *Bot, private *mux.Router, public *mux.Router)
 }
 
-type Rewarder interface {
-	InitRewarder(*Bot)
-	RegisterBadge(shortName, title, description string)
-	LogEvent(user *User, event string, data interface{}) error
-	FetchEventsSince(user *User, since time.Time, event string, data interface{}) error
-	FetchLastEvent(user *User, event string, data interface{}) error
-	FetchLastNEvents(user *User, num int, event string, data interface{}) error
-	AwardBadge(bot *Bot, user *User, shortName string) error
+// WebServerAuth returns a middleware warpping the passed on `http.Handler`. Only one auth handler can be added.
+type WebServerAuth interface {
+	InitWebServerAuth(bot *Bot, webserver WebServer)
 }
 
 var registeredPlugins = make([]Plugin, 0)
@@ -54,16 +51,16 @@ func RegisterPlugin(plugin Plugin) {
 	registeredPlugins = append(registeredPlugins, plugin)
 }
 
-func InitChatPlugins(bot *Bot) {
+func initChatPlugins(bot *Bot) {
 	for _, plugin := range registeredPlugins {
-		chatPlugin, ok := plugin.(ChatPlugin)
+		chatPlugin, ok := plugin.(PluginInitializer)
 		if ok {
-			chatPlugin.InitChatPlugin(bot)
+			chatPlugin.InitPlugin(bot)
 		}
 	}
 }
 
-func InitWebServer(bot *Bot, enabledPlugins []string) {
+func initWebServer(bot *Bot, enabledPlugins []string) {
 	for _, plugin := range registeredPlugins {
 		webServer, ok := plugin.(WebServer)
 		if ok {
@@ -74,26 +71,25 @@ func InitWebServer(bot *Bot, enabledPlugins []string) {
 	}
 }
 
-func InitWebPlugins(bot *Bot) {
+func initWebPlugins(bot *Bot) {
 	if bot.WebServer == nil {
 		return
 	}
 
 	for _, plugin := range registeredPlugins {
-		webPlugin, ok := plugin.(WebPlugin)
-		if ok {
+		if webPlugin, ok := plugin.(WebPlugin); ok {
 			webPlugin.InitWebPlugin(bot, bot.WebServer.PrivateRouter(), bot.WebServer.PublicRouter())
 		}
-	}
-}
 
-func InitRewarder(bot *Bot) {
-	for _, plugin := range registeredPlugins {
-		rewarder, ok := plugin.(Rewarder)
-		if ok {
-			rewarder.InitRewarder(bot)
-			bot.Rewarder = rewarder
-			return
+		count := 0
+		if webServerAuth, ok := plugin.(WebServerAuth); ok {
+			count += 1
+
+			if count > 1 {
+				log.Fatalln("Can not load two WebServerAuth plugins. Already loaded one.")
+			}
+			webServerAuth.InitWebServerAuth(bot, bot.WebServer)
 		}
+
 	}
 }

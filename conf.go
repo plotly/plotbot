@@ -5,19 +5,20 @@ import (
 	"os"
 )
 
-type HipchatConfig struct {
-	Username        string
-	Password        string
-	Resource        string
-	Nickname        string
-	Mention         string
-	Rooms           []string
-	TeamRoom        string `json:"team_room"`
-	HipchatApiToken string `json:"hipchat_api_token"`
-	WebBaseURL      string `json:"web_base_url"`
+type SlackConfig struct {
+	Username       string
+	Password       string
+	Resource       string
+	Nickname       string
+	GeneralChannel string `json:"general_channel"`
+	TeamDomain     string `json:"team_domain"`
+	TeamID         string `json:"team_id"`
+	ApiToken       string `json:"api_token"`
+	WebBaseURL     string `json:"web_base_url"`
+	Debug          bool
 }
 
-type LevelConfig struct {
+type LevelDBConfig struct {
 	Path string
 }
 
@@ -27,10 +28,6 @@ type ChatPluginConfig struct {
 
 	// Whether to handle messages that are not destined to me
 	OnlyMentions bool
-}
-
-type Config struct {
-	Hipchat HipchatConfig `json:"Hipchat"`
 }
 
 func checkPermission(file string) error {
