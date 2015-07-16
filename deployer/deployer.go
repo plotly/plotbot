@@ -292,7 +292,6 @@ func (dep *Deployer) pubsubForwardReply() {
 			lines += "\n"
 		case <-time.After(2 * time.Second):
 			if lines != "" {
-				log.Println("sending buffered lines")
 				dep.bot.SendToChannel(dep.config.ProgressRoom, lines)
 				lines = ""
 			}
