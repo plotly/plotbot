@@ -281,9 +281,22 @@ func (dep *Deployer) manageKillProcess(pty *os.File) {
 }
 
 func (dep *Deployer) pubsubForwardReply() {
-	for msg := range dep.pubsub.Sub("ansible-line") {
-		line := msg.(string)
-		dep.bot.SendToChannel(dep.config.ProgressRoom, line)
+	lines := ""
+
+	for {
+		select {
+		case msg := <-dep.pubsub.Sub("ansible-line"):
+			if msg.(string) != "" {
+				lines += fmt.Sprintf("`%s`", msg.(string))
+			}
+			lines += "\n"
+		case <-time.After(2 * time.Second):
+			if lines != "" {
+				log.Println("sending buffered lines")
+				dep.bot.SendToChannel(dep.config.ProgressRoom, lines)
+				lines = ""
+			}
+		}
 	}
 }
 
