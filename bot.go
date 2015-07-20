@@ -450,11 +450,8 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 		log.Printf("User %q is now %q\n", user.Name, ev.Presence)
 		user.Presence = ev.Presence
 
-	/**
-	 * Mama
-	 */
 	case slack.LatencyReport:
-		fmt.Printf("Current latency: %v\n", ev)
+		break
 	case *slack.SlackWSError:
 		fmt.Printf("Error: %d - %s\n", ev.Code, ev.Msg)
 
