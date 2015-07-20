@@ -143,11 +143,11 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 	} else if msg.Contains("unlock deploy") {
 		dep.lockedBy = ""
 		conv.Reply(msg, fmt.Sprintf("Deployment is now unlocked."))
-		bot.Notify(dep.config.AnnounceRoom, "purple", "text", fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name), true)
+		bot.Notify(dep.config.AnnounceRoom, "#00ff00", fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name))
 	} else if msg.Contains("lock deploy") {
 		dep.lockedBy = msg.FromUser.Name
 		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.Config.Nickname))
-		bot.Notify(dep.config.AnnounceRoom, "purple", "text", fmt.Sprintf("%s has locked deployment", dep.lockedBy), true)
+		bot.Notify(dep.config.AnnounceRoom, "#ff0000", fmt.Sprintf("%s has locked deployment", dep.lockedBy))
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
 		mention := dep.bot.MentionPrefix
 		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s, [please|insert reverence] deploy [<branch-name>] to <environment> [using <deployment-branch>][, tags: <ansible-playbook tags>, ..., ...]
@@ -206,7 +206,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	//
 
 	bot := dep.bot
-	bot.Notify(dep.config.AnnounceRoom, "purple", "text", fmt.Sprintf("[deployer] Launching: %s", params), true)
+	bot.Notify(dep.config.AnnounceRoom, "#447bdc", fmt.Sprintf("[deployer] Launching: %s, monitor in %s", params, dep.config.ProgressRoom))
 	dep.replyPersonnally(params, bot.WithMood("deploying, my friend", "deploying, yyaaahhhOooOOO!"))
 
 	if params.Environment == "prod" {
