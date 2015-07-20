@@ -197,17 +197,19 @@ func (bot *Bot) ReplyPrivately(msg *Message, reply string) {
 	bot.replySink <- msg.ReplyPrivately(reply)
 }
 
-func (bot *Bot) Notify(room, color, format, msg string, notify bool) error {
-	log.Println("DEPRECATED. Please use the Slack API with .PostMessage")
-	// bot.Slack.PostMessage(room, msg, slack.PostMessageParameters{
-	// 	Attachments: []slack.Attachment{
-	// 		{
-	// 			Color: color,
-	// 			Text: msg,
-	// 		},
-	// 	},
-	// })
-	return nil
+func (bot *Bot) Notify(room, color, msg string) {
+	_, _, err := bot.Slack.PostMessage(room, "", slack.PostMessageParameters{
+		Attachments: []slack.Attachment{
+			{
+				Color: color,
+				Text:  msg,
+			},
+		},
+	})
+
+	if err != nil {
+		log.Printf("Notify error: %s\n", err)
+	}
 }
 
 func (bot *Bot) SendToChannel(channelName string, message string) {
