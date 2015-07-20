@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kr/pty"
-	"github.com/tuxychandru/pubsub"
 
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/internal"
@@ -23,7 +22,7 @@ type Deployer struct {
 	bot        *plotbot.Bot
 	env        string
 	config     *DeployerConfig
-	pubsub     *pubsub.PubSub
+	progress   chan string
 	internal   *internal.InternalAPI
 	lockedBy   string
 }
@@ -48,7 +47,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	bot.LoadConfig(&conf)
 
 	dep.bot = bot
-	dep.pubsub = pubsub.New(100)
+	dep.progress = make(chan string, 1000)
 	dep.config = &conf.Deployer
 	dep.env = os.Getenv("PLOTLY_ENV")
 
@@ -58,7 +57,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 
 	dep.loadInternalAPI()
 
-	go dep.pubsubForwardReply()
+	go dep.forwardProgress()
 
 	bot.ListenFor(&plotbot.Conversation{
 		HandlerFunc:    dep.ChatHandler,
@@ -263,7 +262,7 @@ func (dep *Deployer) pullDeployRepo(deploymentBranch string) error {
 }
 
 func (dep *Deployer) pubLine(str string) {
-	dep.pubsub.Pub(str, "ansible-line")
+	dep.progress <- str
 }
 
 func (dep *Deployer) manageKillProcess(pty *os.File) {
@@ -280,14 +279,14 @@ func (dep *Deployer) manageKillProcess(pty *os.File) {
 	}
 }
 
-func (dep *Deployer) pubsubForwardReply() {
+func (dep *Deployer) forwardProgress() {
 	lines := ""
 
 	for {
 		select {
-		case msg := <-dep.pubsub.Sub("ansible-line"):
-			if msg.(string) != "" {
-				lines += fmt.Sprintf("`%s`", msg.(string))
+		case msg := <-dep.progress:
+			if msg != "" {
+				lines += fmt.Sprintf("`%s`", msg)
 			}
 			lines += "\n"
 		case <-time.After(2 * time.Second):
@@ -305,7 +304,7 @@ func (dep *Deployer) manageDeployIo(reader io.Reader) {
 		if dep.runningJob == nil {
 			continue
 		}
-		dep.pubLine(scanner.Text())
+		dep.progress <- scanner.Text()
 	}
 }
 
