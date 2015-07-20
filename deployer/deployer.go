@@ -286,12 +286,13 @@ func (dep *Deployer) forwardProgress() {
 		select {
 		case msg := <-dep.progress:
 			if msg != "" {
-				lines += fmt.Sprintf("`%s`", msg)
+				lines += fmt.Sprintf("%s", msg)
 			}
 			lines += "\n"
 		case <-time.After(2 * time.Second):
 			if lines != "" {
-				dep.bot.SendToChannel(dep.config.ProgressRoom, lines)
+				escapedLines := fmt.Sprintf("```%s```", lines)
+				dep.bot.SendToChannel(dep.config.ProgressRoom, escapedLines)
 				lines = ""
 			}
 		}
