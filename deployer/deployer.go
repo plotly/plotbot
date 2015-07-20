@@ -121,7 +121,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 	} else if msg.Contains("cancel deploy") {
 
 		if dep.runningJob == nil {
-			conv.Reply(msg, "No deploy running, sorry man..")
+			conv.Reply(msg, "No deploy running, sorry friend..")
 		} else {
 			if dep.runningJob.killing == true {
 				conv.Reply(msg, "deploy: Interrupt signal already sent, waiting to die")
