@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kr/pty"
-	"github.com/tuxychandru/pubsub"
 
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/internal"
@@ -23,7 +22,7 @@ type Deployer struct {
 	bot        *plotbot.Bot
 	env        string
 	config     *DeployerConfig
-	pubsub     *pubsub.PubSub
+	progress   chan string
 	internal   *internal.InternalAPI
 	lockedBy   string
 }
@@ -48,7 +47,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	bot.LoadConfig(&conf)
 
 	dep.bot = bot
-	dep.pubsub = pubsub.New(100)
+	dep.progress = make(chan string, 1000)
 	dep.config = &conf.Deployer
 	dep.env = os.Getenv("PLOTLY_ENV")
 
@@ -58,7 +57,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 
 	dep.loadInternalAPI()
 
-	go dep.pubsubForwardReply()
+	go dep.forwardProgress()
 
 	bot.ListenFor(&plotbot.Conversation{
 		HandlerFunc:    dep.ChatHandler,
@@ -121,7 +120,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 	} else if msg.Contains("cancel deploy") {
 
 		if dep.runningJob == nil {
-			conv.Reply(msg, "No deploy running, sorry man..")
+			conv.Reply(msg, "No deploy running, sorry friend..")
 		} else {
 			if dep.runningJob.killing == true {
 				conv.Reply(msg, "deploy: Interrupt signal already sent, waiting to die")
@@ -144,11 +143,11 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 	} else if msg.Contains("unlock deploy") {
 		dep.lockedBy = ""
 		conv.Reply(msg, fmt.Sprintf("Deployment is now unlocked."))
-		bot.Notify(dep.config.AnnounceRoom, "purple", "text", fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name), true)
+		bot.Notify(dep.config.AnnounceRoom, "#00ff00", fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name))
 	} else if msg.Contains("lock deploy") {
 		dep.lockedBy = msg.FromUser.Name
 		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.Config.Nickname))
-		bot.Notify(dep.config.AnnounceRoom, "purple", "text", fmt.Sprintf("%s has locked deployment", dep.lockedBy), true)
+		bot.Notify(dep.config.AnnounceRoom, "#ff0000", fmt.Sprintf("%s has locked deployment", dep.lockedBy))
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
 		mention := dep.bot.MentionPrefix
 		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s, [please|insert reverence] deploy [<branch-name>] to <environment> [using <deployment-branch>][, tags: <ansible-playbook tags>, ..., ...]
@@ -207,7 +206,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	//
 
 	bot := dep.bot
-	bot.Notify(dep.config.AnnounceRoom, "purple", "text", fmt.Sprintf("[deployer] Launching: %s", params), true)
+	bot.Notify(dep.config.AnnounceRoom, "#447bdc", fmt.Sprintf("[deployer] Launching: %s, monitor in %s", params, dep.config.ProgressRoom))
 	dep.replyPersonnally(params, bot.WithMood("deploying, my friend", "deploying, yyaaahhhOooOOO!"))
 
 	if params.Environment == "prod" {
@@ -263,7 +262,7 @@ func (dep *Deployer) pullDeployRepo(deploymentBranch string) error {
 }
 
 func (dep *Deployer) pubLine(str string) {
-	dep.pubsub.Pub(str, "ansible-line")
+	dep.progress <- str
 }
 
 func (dep *Deployer) manageKillProcess(pty *os.File) {
@@ -280,19 +279,20 @@ func (dep *Deployer) manageKillProcess(pty *os.File) {
 	}
 }
 
-func (dep *Deployer) pubsubForwardReply() {
+func (dep *Deployer) forwardProgress() {
 	lines := ""
 
 	for {
 		select {
-		case msg := <-dep.pubsub.Sub("ansible-line"):
-			if msg.(string) != "" {
-				lines += fmt.Sprintf("`%s`", msg.(string))
+		case msg := <-dep.progress:
+			if msg != "" {
+				lines += fmt.Sprintf("%s", msg)
 			}
 			lines += "\n"
 		case <-time.After(2 * time.Second):
 			if lines != "" {
-				dep.bot.SendToChannel(dep.config.ProgressRoom, lines)
+				escapedLines := fmt.Sprintf("```%s```", lines)
+				dep.bot.SendToChannel(dep.config.ProgressRoom, escapedLines)
 				lines = ""
 			}
 		}
@@ -305,7 +305,7 @@ func (dep *Deployer) manageDeployIo(reader io.Reader) {
 		if dep.runningJob == nil {
 			continue
 		}
-		dep.pubLine(scanner.Text())
+		dep.progress <- scanner.Text()
 	}
 }
 
