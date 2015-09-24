@@ -173,7 +173,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		dep.pubLine(fmt.Sprintf("[deployer] Using %s deployment/ branch (latest revision)", deploymentBranch))
 	}
 	hostsFile := fmt.Sprintf("hosts_%s", params.Environment)
-	if params.Environment == "prod" {
+	if params.Environment == "prod" || params.Environment == "stage" {
 		hostsFile = "tools/plotly_ec2.py"
 	}
 	playbookFile := fmt.Sprintf("playbook_%s.yml", params.Environment)
