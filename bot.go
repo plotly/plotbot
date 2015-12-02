@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nlopes/slack"
-	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/nlopes/slack"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb"
 )
 
 type Bot struct {

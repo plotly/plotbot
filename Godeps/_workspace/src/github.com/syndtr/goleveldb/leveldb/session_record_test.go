@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 func decodeEncode(v *sessionRecord) (res bool, err error) {

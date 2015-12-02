@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/nlopes/slack"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/nlopes/slack"
 )
 
 type Conversation struct {
