@@ -12,11 +12,11 @@ import (
 	"os"
 	"sync"
 
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/journal"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/journal"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type ErrManifestCorrupted struct {

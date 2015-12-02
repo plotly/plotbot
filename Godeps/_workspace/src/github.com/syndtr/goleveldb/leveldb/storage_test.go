@@ -17,8 +17,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/storage"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const typeShift = 4

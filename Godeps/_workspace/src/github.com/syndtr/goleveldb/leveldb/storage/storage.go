@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type FileType uint32

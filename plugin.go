@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
-	"github.com/nlopes/slack"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/gorilla/mux"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/gorilla/sessions"
+	"github.com/plotly/plotbot/Godeps/_workspace/src/github.com/nlopes/slack"
 )
 
 //
