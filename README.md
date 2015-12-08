@@ -5,6 +5,8 @@
 
 ## Configuration
 
+### Setup your own Go environment
+
 * Install your Go environment, under Ubuntu, use this method:
 
     http://blog.labix.org/2013/06/15/in-flight-deb-packages-of-go
@@ -39,6 +41,31 @@
    cd $GOPATH/src/github.com/plotly/plotbot/web
    npm run build
    ```
+
+
+### Using Go docker container
+
+The GOPATH is set under container, so no need do it.
+
+* Use `docker-compose` to run container, under project directory
+
+    ```bash
+    $ docker-compose up -d  # run container plotbot
+    $ docker-compose stop   # stop container plotbot
+    $ docker-compose rm -f  # delete container plotbot
+    ```
+
+* To run inside container plotbot
+
+    ```bash
+    $ docker exec -ti plotbot /bin/bash
+    ```
+
+* To install godep, inside container plotbot do
+
+    ```bash
+    $ go get github.com/tools/godep
+    ```
 
 ## Local build and install
 
