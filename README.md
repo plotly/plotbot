@@ -80,9 +80,7 @@ You can either install locally the go environment, or simply use go docker image
 
 ## Using Go docker container instead
 
-Rename `docker-compose.yml.example` file to `docker-compose.yml`, 
-
-The GOPATH is set under container, so no need do it, the current working `plotbot` folder will be mounted inside container as `/go/src/github.com/plotly/plotbot`, so no need to set project path either. As docker container synchronizes such folder with your filesystem, so you can just edit files on your local filesystem. 
+Rename `docker-compose.yml.example` file to `docker-compose.yml`, and tweak at will. For example, change the go version. The GOPATH is set under container, so no need do it, the current working `plotbot` folder will be mounted inside container as `/go/src/github.com/plotly/plotbot`, so no need to set project path either. As docker container synchronizes such folder with your filesystem, so you can just edit files on your local filesystem. 
 
 * Use `docker-compose` to run container, under project directory
 
