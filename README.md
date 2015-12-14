@@ -5,7 +5,7 @@
 
 ## Local installation without docker container
 
-You can either install local the go pkg, or simply use go docker image to create a go docker container. For the former approach, please read the following guide. Jump to next section for the go docker image approach.
+You can either install locally the go environment, or simply use go docker image to create a go docker container. For the former approach, please read the following guide; jump to next [section](#using-go-docker-container-instead) for the go docker image approach.
 
 ### Setup your own Go environment
 
