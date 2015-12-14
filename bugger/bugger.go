@@ -28,8 +28,9 @@ func (bugger *Bugger) makeBugReporter(days int) (reporters []bugReporter) {
     return
   }
 
+	reporters := []
+
 	for repo := range bugger.ghclient.Conf.Repos {
-		repo := bugger.ghclient.Conf.Repos[0]
 
 		query := github.SearchQuery{
 			Repo:        repo,
