@@ -66,14 +66,14 @@ The GOPATH is set under container, so no need do it, the current working `plotbo
 * To install godep, inside container plotbot do
 
     ```bash
-    $ go get github.com/tools/godep
+    # go get github.com/tools/godep
     ```
 
-* Compile plotbot source
+* Compile plotbot source inside docker container,
 
     ```bash
-    $ cd /go/src/github.com/plotly/plotbot/plotbot
-    $ godep go install
+    # cd /go/src/github.com/plotly/plotbot/plotbot
+    # godep go install
     ```
 
     above commands will create a binary `plotbot` file under `/go/bin` inside docker container, as the `GOPATH` is already set, you can run `plotbot` anywhere inside docker container.
