@@ -45,15 +45,17 @@
 
 ### Using Go docker container
 
-The GOPATH is set under container, so no need do it.
+The GOPATH is set under container, so no need do it, the current working `plotbot` folder will be mounted inside container as `/go/src/github.com/plotly/plotbot`, so no need to set project path either. As docker container synchronizes such folder with your filesystem, so you can just edit files on your local filesystem.
 
 * Use `docker-compose` to run container, under project directory
 
     ```bash
     $ docker-compose up -d  # run container plotbot
     $ docker-compose stop   # stop container plotbot
+    $ docker-compose start  # start stopped container plotbot
     $ docker-compose rm -f  # delete container plotbot
     ```
+  PS: `docker-compose rm -f` will delete all efforts done inside container, while `stop/start` routine will keep all the changes.
 
 * To run inside container plotbot
 
@@ -66,6 +68,16 @@ The GOPATH is set under container, so no need do it.
     ```bash
     $ go get github.com/tools/godep
     ```
+
+* Compile plotbot source
+
+    ```bash
+    $ cd /go/src/github.com/plotly/plotbot/plotbot
+    $ godep go install
+    ```
+
+    above commands will create a binary `plotbot` file under `/go/bin` inside docker container, as the `GOPATH` is already set, you can run `plotbot` anywhere inside docker container.
+
 
 ## Local build and install
 
