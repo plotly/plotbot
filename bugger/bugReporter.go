@@ -39,6 +39,15 @@ func (r *bugReporter) printReport(days int) (report string) {
 	return
 }
 
+func (r *bugReporter) printAggregate (reporters []bugReporter, days int) (report string){
+	report = fmt.Sprintf("=========================================")
+	for reporter := range reporters {
+		report +=  reporter.printReport(days)
+	}
+	report += fmt.Sprintf("=========================================")
+	return
+}
+
 func (r *bugReporter) printCount(days int) (count string) {
 
 	dayheader := fmt.Sprintf(" BUG COUNT FOR LAST %d DAYS ", days) // 20 spaces

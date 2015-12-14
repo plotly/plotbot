@@ -21,37 +21,40 @@ type Bugger struct {
 	ghclient github.Client
 }
 
-func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
+func (bugger *Bugger) makeBugReporter(days int) (reporters []bugReporter) {
 
-        if len(bugger.ghclient.Conf.Repos) == 0 {
-                log.Println("No repos configured - can't produce a bug report")
-                return
-        }
+  if len(bugger.ghclient.Conf.Repos) == 0 {
+		log.Println("No repos configured - can't produce a bug report")
+    return
+  }
 
-	repo := bugger.ghclient.Conf.Repos[0]
+	for repo := range bugger.ghclient.Conf.Repos {
+		repo := bugger.ghclient.Conf.Repos[0]
 
-	query := github.SearchQuery{
-		Repo:        repo,
-		Labels:      []string{"bug"},
-		ClosedSince: time.Now().Add(-time.Duration(days) * (24 * time.Hour)).Format("2006-01-02"),
-	}
+		query := github.SearchQuery{
+			Repo:        repo,
+			Labels:      []string{"bug"},
+			ClosedSince: time.Now().Add(-time.Duration(days) * (24 * time.Hour)).Format("2006-01-02"),
+		}
 
-	issueList, err := bugger.ghclient.DoSearchQuery(query)
-	if err != nil {
-		log.Print(err)
-		return
-	}
+		issueList, err := bugger.ghclient.DoSearchQuery(query)
+		if err != nil {
+			log.Print(err)
+			return
+		}
 
-	/*
-	 * Get an array of issues matching Filters
-	 */
-	issueChan := make(chan github.IssueItem, 1)
-	go bugger.ghclient.DoEventQuery(issueList, repo, issueChan)
+		/*
+		 * Get an array of issues matching Filters
+		 */
+		issueChan := make(chan github.IssueItem, 1)
+		go bugger.ghclient.DoEventQuery(issueList, repo, issueChan)
 
-	reporter.Git2Chat = bugger.ghclient.Conf.Github2Chat
+		reporter.Git2Chat = bugger.ghclient.Conf.Github2Chat
 
-	for issue := range issueChan {
-		reporter.addBug(issue)
+		for issue := range issueChan {
+			reporter.addBug(issue)
+		}
+		append(reporters, reporter)
 	}
 
 	return
@@ -109,8 +112,11 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 
 		days := util.GetDaysFromQuery(msg.Text)
 		bugger.messageReport(days, msg, conv, func() string {
-			reporter := bugger.makeBugReporter(days)
-			return reporter.printReport(days)
+			reporters := bugger.makeBugReporter(days)
+			for report := range reporters {
+				return reporter.printAggregate(days)
+			}
+
 		})
 
 	} else if msg.Contains("bug count") {
