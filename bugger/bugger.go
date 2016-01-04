@@ -51,7 +51,7 @@ func (bugger *Bugger) makeBugReporter(days int, repo string) (reporter bugReport
 	return
 }
 
-func (bugger *Bugger) aggregateBugReporter(msg *plotbot.Message) {
+func (bugger *Bugger) aggregateBugReporter(conv *plotbot.Conversation, msg *plotbot.Message) {
 	if len(bugger.ghclient.Conf.Repos) == 0 {
 			log.Println("No repos configured - can't produce a bug report")
 			return
@@ -62,7 +62,7 @@ func (bugger *Bugger) aggregateBugReporter(msg *plotbot.Message) {
 
 		var reportsBuffer bytes.Buffer
 
-		for repo in bugger.ghclient.Conf.Repos{
+		for _, repo := range bugger.ghclient.Conf.Repos {
 			reporter := bugger.makeBugReporter(days, repo)
 			if msg.Contains("bug report"){
 				reportsBuffer.WriteString(reporter.printReport(days))
@@ -129,7 +129,7 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 • %s %s from the past week`, mention, report, mention, report, mention, report, mention, report, mention, report))
 
 	} else {
-		bugger.aggregateBugReporter(msg)
+		bugger.aggregateBugReporter(conv, msg)
 	}
 
 	return
