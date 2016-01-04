@@ -24,10 +24,7 @@ type Bugger struct {
 
 func (bugger *Bugger) makeBugReporter(days int, repo string) (reporters bugReporter) {
 
-	if len(bugger.ghclient.Conf.Repos) == 0 {
-			log.Println("No repos configured - can't produce a bug report")
-    	return
-  }
+
 
 
 	query := github.SearchQuery{
@@ -109,6 +106,11 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 
 	} else if msg.Contains("bug report") {
 
+		if len(bugger.ghclient.Conf.Repos) == 0 {
+				log.Println("No repos configured - can't produce a bug report")
+	    	return
+	  }
+
 		days := util.GetDaysFromQuery(msg.Text)
 		bugger.messageReport(days, msg, conv, func() string {
 
@@ -123,6 +125,11 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 		})
 
 	} else if msg.Contains("bug count") {
+
+		if len(bugger.ghclient.Conf.Repos) == 0 {
+				log.Println("No repos configured - can't produce a bug report")
+	    	return
+	  }
 
 		days := util.GetDaysFromQuery(msg.Text)
 		bugger.messageReport(days, msg, conv, func() string {
