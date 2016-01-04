@@ -22,7 +22,7 @@ type Bugger struct {
 	ghclient github.Client
 }
 
-func (bugger *Bugger) makeBugReporter(days int, repo string) (reporters bugReporter) {
+func (bugger *Bugger) makeBugReporter(days int, repo string) (reporter bugReporter) {
 
 
 
