@@ -24,9 +24,6 @@ type Bugger struct {
 
 func (bugger *Bugger) makeBugReporter(days int, repo string) (reporter bugReporter) {
 
-
-
-
 	query := github.SearchQuery{
 		Repo:        repo,
 		Labels:      []string{"bug"},
@@ -52,6 +49,35 @@ func (bugger *Bugger) makeBugReporter(days int, repo string) (reporter bugReport
 	}
 
 	return
+}
+
+func (bugger *Bugger) aggregateBugReporter(msg *plotbot.Message) {
+	if len(bugger.ghclient.Conf.Repos) == 0 {
+			log.Println("No repos configured - can't produce a bug report")
+			return
+	}
+
+	days := util.GetDaysFromQuery(msg.Text)
+	bugger.messageReport(days, msg, conv, func() string {
+
+		var reportsBuffer bytes.Buffer
+
+		for repo in bugger.ghclient.Conf.Repos{
+			reporter := bugger.makeBugReporter(days, repo)
+			if msg.Contains("bug report"){
+				reportsBuffer.WriteString(reporter.printReport(days))
+			}
+
+			if msg.Contains("bug count"){
+				reportsBuffer.WriteString(reporter.printCount(days))
+			}
+
+		}
+
+		return reportsBuffer.String()
+
+	})
+
 }
 
 func (bugger *Bugger) InitPlugin(bot *plotbot.Bot) {
@@ -102,45 +128,8 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 • %s I want a %s from the past 2 weeks
 • %s %s from the past week`, mention, report, mention, report, mention, report, mention, report, mention, report))
 
-	} else if msg.Contains("bug report") {
-
-		if len(bugger.ghclient.Conf.Repos) == 0 {
-				log.Println("No repos configured - can't produce a bug report")
-	    	return
-	  }
-
-		days := util.GetDaysFromQuery(msg.Text)
-		bugger.messageReport(days, msg, conv, func() string {
-
-			var reportsBuffer bytes.Buffer
-			for repo in bugger.ghclient.Conf.Repos{
-				reporter := bugger.makeBugReporter(days, repo)
-				reportsBuffer.WriteString(reporter.printReport(days))
-			}
-
-			return reportsBuffer.String()
-
-		})
-
-	} else if msg.Contains("bug count") {
-
-		if len(bugger.ghclient.Conf.Repos) == 0 {
-				log.Println("No repos configured - can't produce a bug report")
-	    	return
-	  }
-
-		days := util.GetDaysFromQuery(msg.Text)
-		bugger.messageReport(days, msg, conv, func() string {
-
-			var reportsBuffer bytes.Buffer
-			for repo in bugger.ghclient.Conf.Repos{
-				reporter := bugger.makeBugReporter(days, repo)
-				reportsBuffer.WriteString(reporter.printCount(days))
-			}
-
-			return reportsBuffer.String()
-		})
-
+	} else {
+		bugger.aggregateBugReporter(msg)
 	}
 
 	return
