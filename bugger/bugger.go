@@ -57,6 +57,10 @@ func (bugger *Bugger) aggregateBugReporter(conv *plotbot.Conversation, msg *plot
 			return
 	}
 
+	if !(msg.Contains("bug report")) && !(msg.Contains("bug count")) {
+		return
+	}
+
 	days := util.GetDaysFromQuery(msg.Text)
 	bugger.messageReport(days, msg, conv, func() string {
 
