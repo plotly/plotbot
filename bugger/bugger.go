@@ -1,6 +1,7 @@
 package bugger
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"time"
@@ -21,42 +22,39 @@ type Bugger struct {
 	ghclient github.Client
 }
 
-func (bugger *Bugger) makeBugReporter(days int) (reporters []bugReporter) {
+func (bugger *Bugger) makeBugReporter(days int, repo string) (reporters bugReporter) {
 
-  if len(bugger.ghclient.Conf.Repos) == 0 {
-		log.Println("No repos configured - can't produce a bug report")
-    return
+	if len(bugger.ghclient.Conf.Repos) == 0 {
+			log.Println("No repos configured - can't produce a bug report")
+    	return
   }
 
-	reporters := []
 
-	for repo := range bugger.ghclient.Conf.Repos {
-
-		query := github.SearchQuery{
-			Repo:        repo,
-			Labels:      []string{"bug"},
-			ClosedSince: time.Now().Add(-time.Duration(days) * (24 * time.Hour)).Format("2006-01-02"),
-		}
-
-		issueList, err := bugger.ghclient.DoSearchQuery(query)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-
-		/*
-		 * Get an array of issues matching Filters
-		 */
-		issueChan := make(chan github.IssueItem, 1)
-		go bugger.ghclient.DoEventQuery(issueList, repo, issueChan)
-
-		reporter.Git2Chat = bugger.ghclient.Conf.Github2Chat
-
-		for issue := range issueChan {
-			reporter.addBug(issue)
-		}
-		append(reporters, reporter)
+	query := github.SearchQuery{
+		Repo:        repo,
+		Labels:      []string{"bug"},
+		ClosedSince: time.Now().Add(-time.Duration(days) * (24 * time.Hour)).Format("2006-01-02"),
 	}
+
+	issueList, err := bugger.ghclient.DoSearchQuery(query)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+
+	/*
+	 * Get an array of issues matching Filters
+	 */
+	issueChan := make(chan github.IssueItem, 1)
+	go bugger.ghclient.DoEventQuery(issueList, repo, issueChan)
+
+	reporter := new(bugReporter)
+	reporter.Git2Chat = bugger.ghclient.Conf.Github2Chat
+
+	for issue := range issueChan {
+		reporter.addBug(issue)
+	}
+
 
 	return
 }
@@ -113,10 +111,14 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 
 		days := util.GetDaysFromQuery(msg.Text)
 		bugger.messageReport(days, msg, conv, func() string {
-			reporters := bugger.makeBugReporter(days)
-			for report := range reporters {
-				return reporter.printAggregate(days)
+
+			var reportsBuffer bytes.Buffer
+			for repo in bugger.ghclient.Conf.Repos{
+				reporter := bugger.makeBugReporter(days, repo)
+				reportsBuffer.WriteString(reporter.printReport(days))
 			}
+
+			return reportsBuffer.String()
 
 		})
 
@@ -124,8 +126,14 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 
 		days := util.GetDaysFromQuery(msg.Text)
 		bugger.messageReport(days, msg, conv, func() string {
-			reporter := bugger.makeBugReporter(days)
-			return reporter.printCount(days)
+
+			var reportsBuffer bytes.Buffer
+			for repo in bugger.ghclient.Conf.Repos{
+				reporter := bugger.makeBugReporter(days, repo)
+				reportsBuffer.WriteString(reporter.printCount(days))
+			}
+
+			return reportsBuffer.String()
 		})
 
 	}
