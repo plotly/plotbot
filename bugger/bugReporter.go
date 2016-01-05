@@ -8,8 +8,9 @@ import (
 )
 
 type bugReporter struct {
-	bugs    []github.IssueItem
-	Git2Chat map[string]string
+	repo_name string
+	bugs      []github.IssueItem
+	Git2Chat  map[string]string
 }
 
 func (r *bugReporter) addBug(issue github.IssueItem) {
@@ -22,6 +23,13 @@ func (r *bugReporter) printReport(days int) (report string) {
 	bar := "************************"
 
 	report = fmt.Sprintf("``` " + bar + dayheader + bar + "\n")
+	report += fmt.Sprintf("|Repo Name: %s\n", r.repo_name)
+
+	if len(r.bugs) == 0 {
+		report += fmt.Sprintf("|There is no bug during defined period.\n")
+		report += "```\n"
+		return
+	}
 
 	report += fmt.Sprintf("|%-45s|%-7s|%-18s|\n", "bug title", "number", "squasher")
 	title := ""
@@ -34,7 +42,7 @@ func (r *bugReporter) printReport(days int) (report string) {
 		report += fmt.Sprintf("|%-45s|%-7d|%-18s|\n", title, bug.Number, bug.LastClosedBy())
 	}
 
-        report += "```\n"
+	report += "```\n"
 
 	return
 }
@@ -45,6 +53,14 @@ func (r *bugReporter) printCount(days int) (count string) {
 	bar := "***"
 
 	count = fmt.Sprintf("```" + bar + dayheader + bar + "\n")
+	count += fmt.Sprintf("|Repo Name: %s\n", r.repo_name)
+
+	if len(r.bugs) == 0 {
+		count += fmt.Sprintf("|There is no bug during defined period.\n")
+		count += "```\n"
+		return
+	}
+
 	count += fmt.Sprintf("|%-20s|%-10s|\n", "team member", "# squashed")
 
 	bugcount := make(map[string]int)
@@ -64,7 +80,7 @@ func (r *bugReporter) printCount(days int) (count string) {
 
 	count += fmt.Sprintf("|%-20s|%-10d|\n", "TOTAL", total)
 
-        count += "```\n"
+	count += "```\n"
 
 	return
 

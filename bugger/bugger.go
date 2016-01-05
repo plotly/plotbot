@@ -1,6 +1,7 @@
 package bugger
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"time"
@@ -21,14 +22,7 @@ type Bugger struct {
 	ghclient github.Client
 }
 
-func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
-
-        if len(bugger.ghclient.Conf.Repos) == 0 {
-                log.Println("No repos configured - can't produce a bug report")
-                return
-        }
-
-	repo := bugger.ghclient.Conf.Repos[0]
+func (bugger *Bugger) makeBugReporter(days int, repo string) (reporter bugReporter) {
 
 	query := github.SearchQuery{
 		Repo:        repo,
@@ -49,12 +43,48 @@ func (bugger *Bugger) makeBugReporter(days int) (reporter bugReporter) {
 	go bugger.ghclient.DoEventQuery(issueList, repo, issueChan)
 
 	reporter.Git2Chat = bugger.ghclient.Conf.Github2Chat
+	reporter.repo_name = repo
 
 	for issue := range issueChan {
 		reporter.addBug(issue)
 	}
 
 	return
+}
+
+func (bugger *Bugger) aggregateBugReporter(conv *plotbot.Conversation, msg *plotbot.Message) {
+	if len(bugger.ghclient.Conf.Repos) == 0 {
+		log.Println("No repos configured - can't produce a bug report")
+		return
+	}
+
+	if !(msg.Contains("bug report")) && !(msg.Contains("bug count")) {
+		return
+	}
+
+	days := util.GetDaysFromQuery(msg.Text)
+	bugger.messageReport(days, msg, conv, func() string {
+
+		var reportsBuffer bytes.Buffer
+
+		for _, repo := range bugger.ghclient.Conf.Repos {
+
+			reporter := bugger.makeBugReporter(days, repo)
+
+			if msg.Contains("bug report") {
+				reportsBuffer.WriteString(reporter.printReport(days))
+			}
+
+			if msg.Contains("bug count") {
+				reportsBuffer.WriteString(reporter.printCount(days))
+			}
+
+		}
+
+		return reportsBuffer.String()
+
+	})
+
 }
 
 func (bugger *Bugger) InitPlugin(bot *plotbot.Bot) {
@@ -105,22 +135,8 @@ func (bugger *Bugger) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messa
 • %s I want a %s from the past 2 weeks
 • %s %s from the past week`, mention, report, mention, report, mention, report, mention, report, mention, report))
 
-	} else if msg.Contains("bug report") {
-
-		days := util.GetDaysFromQuery(msg.Text)
-		bugger.messageReport(days, msg, conv, func() string {
-			reporter := bugger.makeBugReporter(days)
-			return reporter.printReport(days)
-		})
-
-	} else if msg.Contains("bug count") {
-
-		days := util.GetDaysFromQuery(msg.Text)
-		bugger.messageReport(days, msg, conv, func() string {
-			reporter := bugger.makeBugReporter(days)
-			return reporter.printCount(days)
-		})
-
+	} else {
+		bugger.aggregateBugReporter(conv, msg)
 	}
 
 	return
