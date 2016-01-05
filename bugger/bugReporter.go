@@ -8,6 +8,7 @@ import (
 )
 
 type bugReporter struct {
+	repo_name	string
 	bugs    []github.IssueItem
 	Git2Chat map[string]string
 }
@@ -22,7 +23,7 @@ func (r *bugReporter) printReport(days int) (report string) {
 	bar := "************************"
 
 	report = fmt.Sprintf("``` " + bar + dayheader + bar + "\n")
-
+	report += fmt.Sprintf("|Repo Name: %s\n", r.repo_name)
 	report += fmt.Sprintf("|%-45s|%-7s|%-18s|\n", "bug title", "number", "squasher")
 	title := ""
 	for _, bug := range r.bugs {
@@ -45,6 +46,7 @@ func (r *bugReporter) printCount(days int) (count string) {
 	bar := "***"
 
 	count = fmt.Sprintf("```" + bar + dayheader + bar + "\n")
+	count += fmt.Sprintf("|Repo Name: %s\n", r.repo_name)
 	count += fmt.Sprintf("|%-20s|%-10s|\n", "team member", "# squashed")
 
 	bugcount := make(map[string]int)
