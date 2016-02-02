@@ -28,12 +28,11 @@ type Deployer struct {
 }
 
 type DeployerConfig struct {
-	RepositoryPath          string   `json:"repository_path"`
-	AnnounceRoom            string   `json:"announce_room"`
-	ProgressRoom            string   `json:"progress_room"`
-	DefaultDeploymentBranch string   `json:"default_deployment_branch"`
-	DefaultStreambedBranch  string   `json:"default_streambed_branch"`
-	AllowedProdBranches     []string `json:"allowed_prod_branches"`
+	RepositoryPath      string   `json:"repository_path"`
+	AnnounceRoom        string   `json:"announce_room"`
+	ProgressRoom        string   `json:"progress_room"`
+	DefaultBranch       string   `json:"default_branch"`
+	AllowedProdBranches []string `json:"allowed_prod_branches"`
 }
 
 func init() {
@@ -89,7 +88,7 @@ type DeployJob struct {
 	killing bool
 }
 
-var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)( using ([a-zA-Z0-9_\.-]+))?((,| with)? tags?:? ?(.+))?`)
+var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
 
 func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
 	bot := conv.Bot
@@ -105,13 +104,12 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			return
 		} else {
 			params := &DeployParams{
-				Environment:      match[3],
-				Branch:           match[2],
-				Tags:             match[8],
-				DeploymentBranch: match[5],
-				InitiatedBy:      msg.FromUser.RealName,
-				From:             "chat",
-				initiatedByChat:  msg,
+				Environment:     match[3],
+				Branch:          match[2],
+				Tags:            match[6],
+				InitiatedBy:     msg.FromUser.RealName,
+				From:            "chat",
+				initiatedByChat: msg,
 			}
 			go dep.handleDeploy(params)
 		}
@@ -133,10 +131,10 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		}
 		return
 	} else if msg.Contains("in the pipe") {
-		url := dep.getCompareUrl("prod", dep.config.DefaultStreambedBranch)
+		url := dep.getCompareUrl("prod", dep.config.DefaultBranch)
 		mention := msg.FromUser.Name
 		if url != "" {
-			conv.Reply(msg, fmt.Sprintf("@%s in %s branch, waiting to reach prod: %s", mention, dep.config.DefaultStreambedBranch, url))
+			conv.Reply(msg, fmt.Sprintf("@%s in %s branch, waiting to reach prod: %s", mention, dep.config.DefaultBranch, url))
 		} else {
 			conv.Reply(msg, fmt.Sprintf("@%s couldn't get current revision on prod", mention))
 		}
@@ -150,7 +148,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		bot.Notify(dep.config.AnnounceRoom, "#ff0000", fmt.Sprintf("%s has locked deployment", dep.lockedBy))
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
 		mention := dep.bot.MentionPrefix
-		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s, [please|insert reverence] deploy [<branch-name>] to <environment> [using <deployment-branch>][, tags: <ansible-playbook tags>, ..., ...]
+		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
 *Examples:*
 • %s please deploy to prod
 • %s deploy thing-to-test to stage
@@ -163,15 +161,6 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 }
 
 func (dep *Deployer) handleDeploy(params *DeployParams) {
-	deploymentBranch := params.ParsedDeploymentBranch(dep.config.DefaultDeploymentBranch)
-	if err := dep.pullDeployRepo(deploymentBranch); err != nil {
-		errorMsg := fmt.Sprintf("Unable to pull from deployment/ repo: %s. Aborting.", err)
-		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
-		dep.replyPersonnally(params, errorMsg)
-		return
-	} else {
-		dep.pubLine(fmt.Sprintf("[deployer] Using %s deployment/ branch (latest revision)", deploymentBranch))
-	}
 	hostsFile := fmt.Sprintf("hosts_%s", params.Environment)
 	if params.Environment == "prod" || params.Environment == "stage" {
 		hostsFile = "tools/plotly_ec2.py"
@@ -180,25 +169,34 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	tags := params.ParsedTags()
 	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile, "--tags", tags}
 
+	branch := dep.config.DefaultBranch
 	if params.Branch != "" {
 		if params.Environment == "prod" {
 			ok := false
-			for _, branch := range dep.config.AllowedProdBranches {
-				if branch == params.Branch {
+			for _, allowed := range dep.config.AllowedProdBranches {
+				if allowed == params.Branch {
 					ok = true
 					break
 				}
 			}
 			if !ok {
-				errorMsg := fmt.Sprintf("%s is not a legal streambed branch for prod.  Aborting.", params.Branch)
+				errorMsg := fmt.Sprintf("%s is not a legal branch for prod.  Aborting.", params.Branch)
 				dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
 				dep.replyPersonnally(params, errorMsg)
 				return
 			}
 		}
+		branch = params.Branch
 		cmdArgs = append(cmdArgs, "-e", fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch))
+	}
+
+	if err := dep.pullRepo(branch); err != nil {
+		errorMsg := fmt.Sprintf("Unable to pull from repo: %s. Aborting.", err)
+		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
+		dep.replyPersonnally(params, errorMsg)
+		return
 	} else {
-		params.Branch = dep.config.DefaultStreambedBranch
+		dep.pubLine(fmt.Sprintf("[deployer] Using latest revision of %s branch", branch))
 	}
 
 	//
@@ -248,7 +246,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	dep.runningJob = nil
 }
 
-func (dep *Deployer) pullDeployRepo(deploymentBranch string) error {
+func (dep *Deployer) pullRepo(branch string) error {
 	cmd := exec.Command("git", "fetch")
 	cmd.Dir = dep.config.RepositoryPath
 	err := cmd.Run()
@@ -256,7 +254,7 @@ func (dep *Deployer) pullDeployRepo(deploymentBranch string) error {
 		return fmt.Errorf("Error executing git fetch: %s", err)
 	}
 
-	cmd = exec.Command("git", "checkout", fmt.Sprintf("origin/%s", deploymentBranch))
+	cmd = exec.Command("git", "checkout", fmt.Sprintf("origin/%s", branch))
 	cmd.Dir = dep.config.RepositoryPath
 	return cmd.Run()
 }
