@@ -156,7 +156,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 • %s deploy thing-to-test to stage
 • %s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
 *Other commands:*
-• %s, what's in the pipe? - show what's waiting to be deployed to prod
+• %s what's in the pipe? - show what's waiting to be deployed to prod
 • %s lock deployment - prevent deployment until it's unlocked
 • %s cancel deploy - cancel the currently running deployment`, mention, mention, mention, mention, mention, mention, mention))
 	}
