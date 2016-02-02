@@ -1,9 +1,7 @@
 package totw
 
 import (
-	"log"
 	"strings"
-	"time"
 
 	"github.com/plotly/plotbot"
 )

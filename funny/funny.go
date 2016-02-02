@@ -1,7 +1,6 @@
 package funny
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/plotly/plotbot"
