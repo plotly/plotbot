@@ -23,8 +23,6 @@ func (totw *Totw) InitPlugin(bot *plotbot.Bot) {
 		"such deep search!",
 		"a real innovator you are",
 		"way to go, I'm impressed",
-		"hope it's better than my own code",
-		"noted, but are you sure it's good ?",
 		"I'll take a look into this one",
 		"you're generous!",
 		"hurray!",
