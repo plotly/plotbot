@@ -342,22 +342,17 @@ func (bot *Bot) LoadConfig(config interface{}) (err error) {
 }
 
 func (bot *Bot) replyHandler() {
-	count := 0
 	for {
 		select {
 		case <-bot.disconnected:
 			return
 		case reply := <-bot.replySink:
 			if reply != nil {
-				//log.Println("REPLYING", reply.To, reply.Message)
-				count += 1
-				err := bot.ws.SendMessage(&slack.OutgoingMessage{
-					Id:        count,
-					ChannelId: reply.To,
-					Type:      "message",
-					Text:      reply.Text,
-				})
+				//log.Println("REPLYING", reply.To, reply.Text)
+				params := slack.PostMessageParameters{}
+				_, _, err := bot.ws.PostMessage(reply.To, reply.Text, params)
 				if err != nil {
+					log.Println("REPLY ERROR")
 					return
 				}
 				time.Sleep(50 * time.Millisecond)
