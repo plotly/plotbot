@@ -67,7 +67,7 @@ func (funny *Funny) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message
 
 	} else if msg.Contains("in theory") {
 
-		conv.Reply(msg, "yeah, theory and practice perfectly match... in theory.")
+		conv.Reply(msg, "yeah, theory and practice perfectly match... en the\u0301orie.")
 	}
 
 	return
