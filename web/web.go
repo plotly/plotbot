@@ -11,11 +11,15 @@ import (
 	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
-	"github.com/plotly/plotbot"
 	"github.com/nlopes/slack"
+	"github.com/plotly/plotbot"
 )
 
 var web *Webapp
+
+func init() {
+	plotbot.RegisterPlugin(&Webapp{})
+}
 
 type Webapp struct {
 	config                *WebappConfig
@@ -33,10 +37,6 @@ type WebappConfig struct {
 	Listen            string `json:"listen"`
 	SessionAuthKey    string `json:"session_auth_key"`
 	SessionEncryptKey string `json:"session_encrypt_key"`
-}
-
-func init() {
-	plotbot.RegisterPlugin(&Webapp{})
 }
 
 func (webapp *Webapp) InitWebServer(bot *plotbot.Bot, enabledPlugins []string) {
@@ -159,4 +159,12 @@ func (webapp *Webapp) getEnabledPluginsJS() template.JS {
 		return template.JS("{}")
 	}
 	return template.JS(jsonMap)
+}
+
+func userAsJavascript(user *slack.User) template.JS {
+	jsonProfile, err := json.MarshalIndent(user, "", "  ")
+	if err != nil {
+		return template.JS(`{"error": "couldn't decode user"}`)
+	}
+	return template.JS(jsonProfile)
 }

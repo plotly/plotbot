@@ -2,16 +2,14 @@ package healthy
 
 import (
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 
 	"github.com/plotly/plotbot"
 )
 
-// Hipbot Plugin
 type Healthy struct {
-	urls   []string
+	urls []string
 }
 
 func init() {
@@ -20,59 +18,58 @@ func init() {
 
 func (healthy *Healthy) InitPlugin(bot *plotbot.Bot) {
 	var conf struct {
-		HealthCheck struct {
+		Healthy struct {
 			Urls []string
 		}
 	}
-
 	bot.LoadConfig(&conf)
 
-	healthy.urls = conf.HealthCheck.Urls
+	healthy.urls = conf.Healthy.Urls
 
 	bot.ListenFor(&plotbot.Conversation{
 		MentionsMeOnly: true,
-		ContainsAny:    []string{"health", "healthy?", "health_check"},
-		HandlerFunc:    healthy.ChatHandler,
+		ContainsAny:    []string{"health", "healthy?", "health check"},
+		HandlerFunc:    healthy.HandleMessage,
 	})
 }
 
-// Handler
-func (healthy *Healthy) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
-	log.Println("Health check. Requested by", msg.FromUser.Name)
-	conv.Reply(msg, healthy.CheckAll())
-}
+func (healthy *Healthy) HandleMessage(conv *plotbot.Conversation, msg *plotbot.Message) {
+	success := []string{}
+	failure := []string{}
 
-func (healthy *Healthy) CheckAll() string {
-	result := make(map[string]bool)
-	failed := make([]string, 0)
 	for _, url := range healthy.urls {
-		ok := check(url)
-		result[url] = ok
-		if !ok {
-			failed = append(failed, url)
+		if isHealthy(url) {
+			success = append(success, url)
+		} else {
+			failure = append(failure, url)
 		}
 	}
-	if len(failed) == 0 {
-		return "All green (For " +
-			strings.Join(healthy.urls, ", ") + ")"
-	} else {
-		return "WARN!! Something wrong with " +
-			strings.Join(failed, ", ")
+
+	if len(success) > 0 {
+		conv.Reply(msg, "All green for: "+
+			strings.Join(success, ", "))
+	}
+	if len(failure) > 0 {
+		conv.Reply(msg, "WARNING!! Something wrong with: "+
+			strings.Join(failure, ", "))
 	}
 }
 
-func check(url string) bool {
+func isHealthy(url string) bool {
 	res, err := http.Get(url)
 	if err != nil {
 		return false
 	}
+
+	defer res.Body.Close()
 	_, err = ioutil.ReadAll(res.Body)
-	res.Body.Close()
 	if err != nil {
 		return false
 	}
-	if res.StatusCode/100 != 2 {
+
+	if res.StatusCode < 200 || res.StatusCode > 299 {
 		return false
 	}
+
 	return true
 }

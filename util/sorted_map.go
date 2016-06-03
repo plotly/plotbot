@@ -1,8 +1,8 @@
-// pulled from this anonymous playground http://play.golang.org/p/x4CoUsJ5tK
 package util
 
 import "sort"
 
+// source: http://play.golang.org/p/x4CoUsJ5tK
 type sortedMap struct {
 	m map[string]int
 	s []string

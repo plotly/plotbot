@@ -3,7 +3,6 @@ package plotberry
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -11,133 +10,89 @@ import (
 	"github.com/plotly/plotbot"
 )
 
-type PlotBerry struct {
-	bot        *plotbot.Bot
-	totalUsers int
-	pingTime   time.Duration
-	eraLength  int
-	endpoint   string
-}
-
-type TotalUsers struct {
-	Plotberries int `json:"plotberries"`
-}
-
-type PlotberryConf struct {
-	EraLength int
-	PingTime  int
-	EndPoint  string
-}
-
 func init() {
 	plotbot.RegisterPlugin(&PlotBerry{})
 }
 
-func (plotberry *PlotBerry) InitPlugin(bot *plotbot.Bot) {
+type PlotlyPlotBerryAnswer struct {
+	Count int `json:"plotberries"`
+}
 
-	var conf struct {
-		Plotberry PlotberryConf
+type PlotBerry struct {
+	bot        *plotbot.Bot
+	totalUsers int
+	config     PlotBerryConfig
+}
+
+type PlotBerryConfig struct {
+	EraLength   int
+	PingTime    time.Duration `json:"-"`
+	RawPingTime int           `json:"PingTime"`
+	Endpoint    string
+}
+
+func (pb *PlotBerry) InitPlugin(bot *plotbot.Bot) {
+	var config struct {
+		PlotBerry PlotBerryConfig
 	}
-	err := bot.LoadConfig(&conf)
+	err := bot.LoadConfig(&config)
 	if err != nil {
-		log.Fatalln("Error loading PlotBerry config section: ", err)
+		log.Fatalln("plotberry: error loading config: ", err)
 		return
 	}
 
-	plotberry.bot = bot
-	plotberry.pingTime = time.Duration(conf.Plotberry.PingTime) * time.Second
-	plotberry.eraLength = conf.Plotberry.EraLength
-	plotberry.endpoint = conf.Plotberry.EndPoint
+	pb.bot = bot
+	pb.config = config.PlotBerry
+	pb.config.PingTime = time.Duration(pb.config.RawPingTime) * time.Second
 
-	// if plotberry.eraLength is 0 we will get a divide by zero error - lets abort first
-	if plotberry.eraLength == 0 {
-		log.Fatal("Plotberry.eraLength may not be zero (divide by zero error), please set the configuration")
+	if pb.config.EraLength == 0 {
+		log.Fatal("plotberry: error: config 'EraLength' can't be 0, please configure it")
 		return
 	}
 
-	statchan := make(chan TotalUsers, 100)
-
-	go plotberry.launchWatcher(statchan)
-	go plotberry.launchCounter(statchan)
+	statsChan := make(chan int, 100)
+	go pb.goWatch(statsChan)
+	go pb.goCount(statsChan)
 
 	bot.ListenFor(&plotbot.Conversation{
-		HandlerFunc: plotberry.ChatHandler,
+		HandlerFunc: pb.handleMessage,
 	})
 }
 
-func (plotberry *PlotBerry) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
+func (pb *PlotBerry) handleMessage(conv *plotbot.Conversation, msg *plotbot.Message) {
 	if msg.MentionsMe && msg.Contains("how many user") {
-		conv.Reply(msg, fmt.Sprintf("We got %d users!", plotberry.totalUsers))
+		conv.Reply(msg, fmt.Sprintf("We've got %d users!", pb.totalUsers))
 	}
-	return
 }
 
-func getplotberry(endpoint string) (*TotalUsers, error) {
-
-	var data TotalUsers
-
-	resp, err := http.Get(endpoint)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		return nil, err
-	}
-
-	return &data, nil
-}
-
-func (plotberry *PlotBerry) launchWatcher(statchan chan TotalUsers) {
-
+func (pb *PlotBerry) goWatch(ch chan int) {
 	for {
-		time.Sleep(plotberry.pingTime)
+		time.Sleep(pb.config.PingTime)
 
-		data, err := getplotberry(plotberry.endpoint)
-
+		count, err := getPlotBerry(pb.config.Endpoint)
 		if err != nil {
-			log.Print(err)
+			log.Println("plotberry: error fetching berries: ", err)
 			continue
 		}
 
-		if data.Plotberries != plotberry.totalUsers {
-			statchan <- *data
+		if count != pb.totalUsers {
+			ch <- count
+			pb.totalUsers = count
 		}
-
-		plotberry.totalUsers = data.Plotberries
 	}
 }
 
-func (plotberry *PlotBerry) launchCounter(statchan chan TotalUsers) {
+func (pb *PlotBerry) goCount(ch chan int) {
+	send := func(msg string) {
+		pb.bot.SendToChannel(pb.bot.Config.GeneralChannel, msg)
+	}
 
 	var lastCount int
 	var countDownActive bool
 
-	send := func(msg string) {
-		plotberry.bot.SendToChannel(plotberry.bot.Config.GeneralChannel, msg)
-	}
-
-	doFinale := func(msg string) {
-		send(msg)
-		go func() {
-			time.Sleep(22 * time.Second)
-			plotberry.bot.SendToChannel(plotberry.bot.Config.GeneralChannel, "...I like mimosas")
-		}()
-	}
-
-	for data := range statchan {
-
-		totalUsers := data.Plotberries
-		untilNext := plotberry.eraLength - totalUsers%plotberry.eraLength
-		nextEra := untilNext + totalUsers
+	for count := range ch {
+		untilNext := pb.config.EraLength - count%pb.config.EraLength
+		nextEra := untilNext + count
 
 		// we have already seen this count
 		if lastCount == untilNext {
@@ -145,23 +100,24 @@ func (plotberry *PlotBerry) launchCounter(statchan chan TotalUsers) {
 		}
 
 		if untilNext <= 10 {
+			// use a bool to handle the cases where we blow over the
+			// era too quick
 			countDownActive = true
 		}
 
 		switch untilNext {
-
 		case 10:
 			send(fmt.Sprintf("@all %d users till %d!", untilNext, nextEra))
 		case 9:
-			send(fmt.Sprintf("We're at %d users!", totalUsers))
+			send(fmt.Sprintf("We're at %d users!", count))
 		case 8:
-			send(fmt.Sprintf("%d...", totalUsers))
+			send(fmt.Sprintf("%d...", count))
 		case 7:
-			send(fmt.Sprintf("%d...\n", totalUsers))
+			send(fmt.Sprintf("%d...\n", count))
 		case 6:
 			send(fmt.Sprintf("%d more to go", untilNext))
 		case 5:
-			send(fmt.Sprintf("@all %d users!\n I'm a freaky proud robot!", totalUsers))
+			send(fmt.Sprintf("@all %d users!\n I'm a freaky proud robot!", count))
 		case 4:
 			send(fmt.Sprintf("%d users till %d!", untilNext, nextEra))
 		case 3:
@@ -171,20 +127,31 @@ func (plotberry *PlotBerry) launchCounter(statchan chan TotalUsers) {
 		case 1:
 			send("https://31.media.tumblr.com/3b74abfa367a3ed9a2cd753cd9018baa/tumblr_miul04oqog1qkp8xio1_400.gif")
 			send(fmt.Sprintf("%d user until %d.\nYOU'RE ALL MAGIC!", untilNext, nextEra))
-
-			// use plotberry era as untilNext will == plotbot.era when totalUsers mod era == 0
-		case plotberry.eraLength:
-			doFinale(fmt.Sprintf("@all !!!\n We're at %d user signups!!!!! Whup Whup - Party for me this weekend", totalUsers))
-			countDownActive = false
+		case pb.config.EraLength: // use eraLength as 0
 		default:
-			// too many users signed on within the ping time and we blew past our era. Play the finale
 			if countDownActive {
-				doFinale(fmt.Sprintf("@all !!!\n We're at %d user signups!!!!! Whup Whup - Party for me this weekend", totalUsers))
+				send(fmt.Sprintf("@all !!!\n We're at %d user signups!!!!! Whup Whup - Party for me this weekend", count))
+				go func() {
+					time.Sleep(22 * time.Second)
+					send("...I like mimosas")
+				}()
+
 				countDownActive = false
 			}
 		}
 
 		lastCount = untilNext
 	}
+}
 
+func getPlotBerry(endpoint string) (int, error) {
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var result PlotlyPlotBerryAnswer
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	return result.Count, err
 }
