@@ -352,8 +352,7 @@ func (bot *Bot) replyHandler() {
 				params := slack.PostMessageParameters{}
 				_, _, err := bot.ws.PostMessage(reply.To, reply.Text, params)
 				if err != nil {
-					log.Println("REPLY ERROR")
-					return
+					log.Fatalln("REPLY ERROR when sending", reply.Text, "->", err)
 				}
 				time.Sleep(50 * time.Millisecond)
 
