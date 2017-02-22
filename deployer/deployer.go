@@ -162,10 +162,17 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 
 func (dep *Deployer) handleDeploy(params *DeployParams) {
 	hostsFile := fmt.Sprintf("hosts_%s", params.Environment)
-	if params.Environment == "prod" || params.Environment == "stage" {
+	if params.Environment == "prod" {
 		hostsFile = "tools/plotly_ec2.py"
+	} else if params.Environment == "stage" {
+		hostsFile = "tools/plotly_gce"
 	}
+
 	playbookFile := fmt.Sprintf("playbook_%s.yml", params.Environment)
+	if params.Environment == "stage" {
+		playbookFile = "playbook_gcpstage.yml"
+	}
+
 	tags := params.ParsedTags()
 	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile, "--tags", tags}
 
