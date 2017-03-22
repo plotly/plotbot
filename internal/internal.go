@@ -1,14 +1,13 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
-
-	"github.com/jmcvetta/napping"
 )
 
 type InternalAPI struct {
-	Config *InternalAPIConfig
+	Config InternalAPIConfig
 }
 
 type InternalAPIConfig map[string]*InternalAPIEnvironment
@@ -18,46 +17,37 @@ type InternalAPIEnvironment struct {
 	AuthKey string `json:"auth_key"`
 }
 
-func New(confLoader func(config interface{}) error) *InternalAPI {
-	var conf struct {
-		PlotlyInternalEndpoint *InternalAPIConfig
-	}
-	confLoader(&conf)
-	intApi := InternalAPI{
-		Config: conf.PlotlyInternalEndpoint,
-	}
-	return &intApi
+type PlolyCurrentHeadResponse struct {
+	CurrentHead string `json:"current_head"`
 }
 
-func (int *InternalAPI) GetCurrentHead(env string) string {
-	conf := (*int.Config)[env]
-	if conf == nil {
+func New(config InternalAPIConfig) *InternalAPI {
+	return &InternalAPI{
+		Config: config,
+	}
+}
+
+func (i *InternalAPI) GetCurrentHead(env string) string {
+	conf := i.Config[env]
+	if conf == nil || conf.BaseURL == "" || conf.AuthKey == "" {
 		return ""
 	}
 
-	url := conf.BaseURL
-	authKey := conf.AuthKey
-
-	if url == "" || authKey == "" {
-		return ""
-	}
-
-	result := struct {
-		CurrentHead string `json:"current_head"`
-	}{}
-
-	req := napping.Request{
-		Url:    fmt.Sprintf("%s%s", url, "/current_head"),
-		Method: "GET",
-		Result: &result,
-		Header: &http.Header{},
-	}
-	req.Header.Set("X-Internal-Key", authKey)
-	_, err := napping.Send(&req)
-
+	req, err := http.NewRequest(
+		"GET", fmt.Sprintf("%s%s", conf.BaseURL, "/current_head"), nil,
+	)
 	if err != nil {
 		return ""
 	}
+	req.Header.Set("X-Internal-Key", conf.AuthKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+
+	defer resp.Body.Close()
+	var result = PlolyCurrentHeadResponse{}
+	err = json.NewDecoder(resp.Body).Decode(&result)
 
 	return result.CurrentHead
 }

@@ -62,7 +62,7 @@ func (bugger *Bugger) aggregateBugReporter(conv *plotbot.Conversation, msg *plot
 		return
 	}
 
-	days := util.GetDaysFromQuery(msg.Text)
+	days := util.ParseDays(msg.Text)
 	bugger.messageReport(days, msg, conv, func() string {
 
 		var reportsBuffer bytes.Buffer

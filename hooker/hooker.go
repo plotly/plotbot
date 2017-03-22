@@ -2,7 +2,6 @@ package hooker
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,18 +10,18 @@ import (
 	"github.com/plotly/plotbot"
 )
 
-func init() {
-	plotbot.RegisterPlugin(&Hooker{})
-}
-
 type Hooker struct {
 	bot    *plotbot.Bot
 	config HookerConfig
 }
 
+func init() {
+	plotbot.RegisterPlugin(&Hooker{})
+}
+
 type HookerConfig struct {
-	StripeSecret string `json:"stripe_secret"`
-	GitHubSecret string `json:"github_secret"`
+	StripeSecret string
+	GitHubSecret string
 }
 
 type MonitAlert struct {
@@ -32,105 +31,76 @@ type MonitAlert struct {
 	Alert   string `json:"alert"`
 }
 
-func (hooker *Hooker) InitWebPlugin(bot *plotbot.Bot, privRouter *mux.Router, pubRouter *mux.Router) {
-	hooker.bot = bot
-
+func (hooker *Hooker) InitWebPlugin(
+	bot *plotbot.Bot, privateRouter *mux.Router, publicRouter *mux.Router,
+) {
 	var conf struct {
 		Hooker HookerConfig
 	}
 	bot.LoadConfig(&conf)
 	hooker.config = conf.Hooker
+	hooker.bot = bot
 
-	pubRouter.HandleFunc("/public/updated_plotbot_repo", hooker.updatedPlotbotRepo)
+	publicRouter.HandleFunc(
+		"/public/hooks/monit",
+		hooker.handleMonitHook,
+	)
 
-	stripeUrl := fmt.Sprintf("/public/stripehook/%s", hooker.config.StripeSecret)
-	pubRouter.HandleFunc(stripeUrl, hooker.onPayingUser)
-
-	pubRouter.HandleFunc("/public/monit", hooker.onMonit)
-
-	privRouter.HandleFunc("/plugins/hooker.json", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			http.Error(w, "Method not accepted", 405)
-			return
-		}
-
-	})
+	publicRouter.HandleFunc(
+		"/public/hooks/github",
+		hooker.handleGithubHook,
+	)
 }
 
-func (hooker *Hooker) updatedPlotbotRepo(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Method not accepted", 405)
-		return
-	}
-
-	bodyBytes, err := ioutil.ReadAll(r.Body)
-
-	body := ""
-	if err != nil {
-		body = "[Error reading body]"
-	} else {
-		body = string(bodyBytes)
-	}
-
-	// TODO: unmarshal the JSON, and check "hooker.config.GitHubSecret"
-
-	text := fmt.Sprintf("/code Got a webhook from Github:\n%s", body)
-	fmt.Println("TEST: ", text)
-	//bot.SendToRoom("123823_devops", )
-}
-
-func (hooker *Hooker) onPayingUser(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "Method not accepted", 405)
-		return
-	}
-
-	bodyBytes, _ := ioutil.ReadAll(r.Body)
-
-	var stripeEvent struct {
-		Type    string
-		Id      string
-		Request string
-	}
-	err := json.Unmarshal(bodyBytes, &stripeEvent)
-
-	if err != nil {
-		log.Println("Hooker: unable to decode incoming JSON: ", err)
-		return
-	}
-
-	if stripeEvent.Type == "customer.subscription.created" {
-		hooker.bot.SendToChannel(hooker.bot.Config.GeneralChannel,
-			fmt.Sprintf("Hey! Someone just subscribed to Plotly! More details here: https://dashboard.stripe.com/logs/%s",
-				stripeEvent.Request))
-	}
-}
-
-func (hooker *Hooker) onMonit(w http.ResponseWriter, r *http.Request) {
-
-	var alert MonitAlert
-
-	if r.Method != "POST" {
-		http.Error(w, "Method not accepted", 405)
-		return
-	}
-
+func (hooker *Hooker) handleMonitHook(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	bodyBytes, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Println("Hooker: unable to read incoming Zapier request: ", err)
+	if r.Method != "POST" {
+		sendMethodNotAllowed(w)
 		return
 	}
 
-	err = json.Unmarshal(bodyBytes, &alert)
-
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Println("Hooker: unable to decode incoming Alert JSON: ", err)
+		log.Println("hooker: monit hook: error reading body: ", err)
 		return
 	}
 
-	fmt.Println("TEST: ", alert)
+	var alert MonitAlert
+	err = json.Unmarshal(body, &alert)
+	if err != nil {
+		log.Println("hooker: monit hook: error parsing json:", err)
+		return
+	}
 
-	//bot.SendToRoom("123823_devops", )
+	// TODO Do something with monit alert
+}
+
+func (hooker *Hooker) handleGithubHook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		sendMethodNotAllowed(w)
+		return
+	}
+	defer r.Body.Close()
+	body, err := ioutil.ReadAll(r.Body)
+
+	if err != nil {
+		log.Println("hooker: github hook: error reading body: ", err)
+		return
+	}
+
+	var payload map[string]interface{}
+	err = json.Unmarshal(body, &payload)
+	if err != nil {
+		log.Println("hooker: github hook: error parsing json:", err)
+		return
+	}
+
+	// TODO Do something with GitHub hook
+}
+
+func sendMethodNotAllowed(w http.ResponseWriter) {
+	http.Error(w,
+		http.StatusText(http.StatusMethodNotAllowed),
+		http.StatusMethodNotAllowed)
 }

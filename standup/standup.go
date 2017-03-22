@@ -5,9 +5,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/nlopes/slack"
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/util"
-	"github.com/nlopes/slack"
 	levelutil "github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -45,7 +45,7 @@ func (standup *Standup) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Mes
 			}
 		}
 	} else if msg.MentionsMe && msg.Contains("standup report") {
-		daysAgo := util.GetDaysFromQuery(msg.Text)
+		daysAgo := util.ParseDays(msg.Text)
 		smap, err := standup.getRange(getStandupDate(-daysAgo), getStandupDate(TODAY))
 		if err != nil {
 			log.Println(err)
@@ -53,7 +53,7 @@ func (standup *Standup) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Mes
 				"I am the eggman and the walrus ate your report - Fzaow!"))
 		} else {
 			if msg.Contains(" my ") {
-				conv.Reply(msg, "```"+smap.filterByEmail(msg.FromUser.Profile.Email).String() + "```")
+				conv.Reply(msg, "```"+smap.filterByEmail(msg.FromUser.Profile.Email).String()+"```")
 			} else {
 				conv.Reply(msg, "```"+smap.String()+"```")
 			}

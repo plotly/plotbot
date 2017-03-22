@@ -64,8 +64,12 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	})
 }
 
-func (dep *Deployer) loadInternalAPI() {
-	dep.internal = internal.New(dep.bot.LoadConfig)
+func (d *Deployer) loadInternalAPI() {
+	var conf struct {
+		PlotlyInternalEndpoint internal.InternalAPIConfig
+	}
+	d.bot.LoadConfig(&conf)
+	d.internal = internal.New(conf.PlotlyInternalEndpoint)
 }
 
 /**
