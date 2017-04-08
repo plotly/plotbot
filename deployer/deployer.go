@@ -112,10 +112,25 @@ type DeployJob struct {
 
 var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
 
+func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
+	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
+		return &DeployParams{
+			Environment:     match[3],
+			Branch:          match[2],
+			Tags:            match[6],
+			InitiatedBy:     msg.FromUser.RealName,
+			From:            "chat",
+			initiatedByChat: msg,
+		}
+	}
+
+	return nil
+}
+
 func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
 	bot := conv.Bot
 
-	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
+	if params := dep.ExtractDeployParams(msg); params != nil {
 		if dep.lockedBy != "" {
 			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  "+
 				"Unlock with '%s, unlock deployment' if they're OK with it.",
@@ -128,14 +143,6 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 				msg.FromUser.Name, params))
 			return
 		} else {
-			params := &DeployParams{
-				Environment:     match[3],
-				Branch:          match[2],
-				Tags:            match[6],
-				InitiatedBy:     msg.FromUser.RealName,
-				From:            "chat",
-				initiatedByChat: msg,
-			}
 			go dep.handleDeploy(params)
 		}
 		return
