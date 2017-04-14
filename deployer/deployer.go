@@ -18,6 +18,7 @@ import (
 )
 
 type Deployer struct {
+	runner     Runnable
 	runningJob *DeployJob
 	bot        plotbot.BotLike
 	env        string
@@ -35,6 +36,16 @@ type DeployerConfig struct {
 	AllowedProdBranches []string `json:"allowed_prod_branches"`
 }
 
+type Runnable interface {
+	Run(string, ...string) *exec.Cmd
+}
+
+type Runner struct{}
+
+func (r Runner) Run(cmd string, args ...string) *exec.Cmd {
+	return exec.Command(cmd, args...)
+}
+
 func init() {
 	plotbot.RegisterPlugin(&Deployer{})
 }
@@ -49,6 +60,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	dep.progress = make(chan string, 1000)
 	dep.config = &conf.Deployer
 	dep.env = os.Getenv("PLOTLY_ENV")
+	dep.runner = Runner{}
 
 	if dep.env == "" {
 		dep.env = "debug"
@@ -222,7 +234,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	}
 
 	dep.pubLine(fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
-	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	cmd := dep.runner.Run(cmdArgs[0], cmdArgs[1:]...)
 	cmd.Dir = dep.config.RepositoryPath
 	cmd.Env = append(os.Environ(), "ANSIBLE_NOCOLOR=1")
 
@@ -254,14 +266,14 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 }
 
 func (dep *Deployer) pullRepo(branch string) error {
-	cmd := exec.Command("git", "fetch")
+	cmd := dep.runner.Run("git", "fetch")
 	cmd.Dir = dep.config.RepositoryPath
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("Error executing git fetch: %s", err)
 	}
 
-	cmd = exec.Command("git", "checkout", fmt.Sprintf("origin/%s", branch))
+	cmd = dep.runner.Run("git", "checkout", fmt.Sprintf("origin/%s", branch))
 	cmd.Dir = dep.config.RepositoryPath
 	return cmd.Run()
 }
