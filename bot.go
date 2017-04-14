@@ -15,6 +15,17 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+type BotLike interface {
+	LoadConfig(interface{}) error
+	ListenFor(*Conversation) error
+	Nickname() string
+	AtMention() string
+	WithMood(string, string) string
+	SendToChannel(string, string)
+	ReplyMention(*Message, string)
+	Notify(string, string, string)
+}
+
 type Bot struct {
 	// Global bot configuration
 	configFile string
@@ -561,4 +572,12 @@ func (bot *Bot) GetChannelByName(name string) *slack.Channel {
 		}
 	}
 	return nil
+}
+
+func (bot *Bot) Nickname() string {
+	return bot.Config.Nickname
+}
+
+func (bot *Bot) AtMention() string {
+	return fmt.Sprintf("@%s:", bot.Myself.Name)
 }

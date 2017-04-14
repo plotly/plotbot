@@ -19,7 +19,7 @@ import (
 
 type Deployer struct {
 	runningJob *DeployJob
-	bot        *plotbot.Bot
+	bot        plotbot.BotLike
 	env        string
 	config     *DeployerConfig
 	progress   chan string
@@ -95,7 +95,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
 		if dep.lockedBy != "" {
-			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  Unlock with '%s, unlock deployment' if they're OK with it.", dep.lockedBy, dep.bot.Config.Nickname))
+			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  Unlock with '%s, unlock deployment' if they're OK with it.", dep.lockedBy, dep.bot.Nickname()))
 			return
 		}
 		if dep.runningJob != nil {
@@ -144,10 +144,10 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		bot.Notify(dep.config.AnnounceRoom, "#00ff00", fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name))
 	} else if msg.Contains("lock deploy") {
 		dep.lockedBy = msg.FromUser.Name
-		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.Config.Nickname))
+		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.Nickname()))
 		bot.Notify(dep.config.AnnounceRoom, "#ff0000", fmt.Sprintf("%s has locked deployment", dep.lockedBy))
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
-		mention := dep.bot.MentionPrefix
+		mention := dep.bot.AtMention()
 		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
 *Examples:*
 • %s please deploy to prod
