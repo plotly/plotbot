@@ -65,7 +65,7 @@ type Conversation struct {
 
 	// Ref to the bot instance.  Populated for you when `ListenFor`-ing the
 	// Conversation.
-	Bot *Bot
+	Bot BotLike
 
 	resetCh chan bool
 	doneCh  chan bool
@@ -86,7 +86,7 @@ func (conv *Conversation) ReplyPrivately(msg *Message, reply string) {
 // Close terminates the Conversation management goroutine, and stops
 // any further listening and message handling
 func (conv *Conversation) Close() {
-	conv.Bot.delConversationCh <- conv
+	conv.Bot.CloseConversation(conv)
 	conv.doneCh <- true
 }
 

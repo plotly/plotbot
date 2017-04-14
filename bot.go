@@ -16,14 +16,19 @@ import (
 )
 
 type BotLike interface {
-	LoadConfig(interface{}) error
-	ListenFor(*Conversation) error
-	Nickname() string
 	AtMention() string
-	WithMood(string, string) string
-	SendToChannel(string, string)
-	ReplyMention(*Message, string)
+	CloseConversation(conv *Conversation)
+	ListenFor(*Conversation) error
+	LoadConfig(interface{}) error
+	Mood() Mood
+	Nickname() string
 	Notify(string, string, string)
+	Reply(*Message, string)
+	ReplyMention(*Message, string)
+	ReplyPrivately(*Message, string)
+	SendToChannel(string, string)
+	SetMood(Mood)
+	WithMood(string, string) string
 }
 
 type Bot struct {
@@ -52,7 +57,7 @@ type Bot struct {
 
 	// Other features
 	WebServer WebServer
-	Mood      Mood
+	mood      Mood
 }
 
 func New(configFile string) *Bot {
@@ -580,4 +585,16 @@ func (bot *Bot) Nickname() string {
 
 func (bot *Bot) AtMention() string {
 	return fmt.Sprintf("@%s:", bot.Myself.Name)
+}
+
+func (bot *Bot) CloseConversation(conv *Conversation) {
+	bot.delConversationCh <- conv
+}
+
+func (bot *Bot) Mood() Mood {
+	return bot.mood
+}
+
+func (bot *Bot) SetMood(mood Mood) {
+	bot.mood = mood
 }
