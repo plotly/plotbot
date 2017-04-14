@@ -2,24 +2,24 @@ package testutils
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/nlopes/slack"
 	"github.com/plotly/plotbot"
 )
 
+var BotId = "mockbotid"
+
 type Bot struct {
-	Config   plotbot.SlackConfig
-	Users    map[string]slack.User
-	Channels map[string]slack.Channel
-	Myself   *slack.UserDetails
-
-	// Internal handling
-	conversations []*plotbot.Conversation
+	Channels      map[string]slack.Channel
+	Config        plotbot.SlackConfig
 	MentionPrefix string
-
-	Mood plotbot.Mood
+	Myself        *slack.UserDetails
+	TestReplies   []*plotbot.BotReply
+	TestNotifies  [][]string
+	Users         map[string]slack.User
+	conversations []*plotbot.Conversation
+	mood          plotbot.Mood
 }
 
 func NewMockBot(sconf plotbot.SlackConfig, userconf slack.UserDetails, mood plotbot.Mood) *Bot {
@@ -38,7 +38,7 @@ func NewMockBot(sconf plotbot.SlackConfig, userconf slack.UserDetails, mood plot
 	}
 
 	defaultuserconf := slack.UserDetails{
-		Id:      "abcdefg",
+		Id:      "mockbot",
 		Name:    "mockbot",
 		Created: slack.JSONTime(time.Now().Unix()),
 	}
@@ -56,12 +56,14 @@ func NewMockBot(sconf plotbot.SlackConfig, userconf slack.UserDetails, mood plot
 	}
 
 	bot := &Bot{
-		Config:        defaultsconf,
-		Users:         make(map[string]slack.User),
 		Channels:      make(map[string]slack.Channel),
+		Config:        defaultsconf,
 		MentionPrefix: fmt.Sprintf("@%s:", defaultsconf.Nickname),
-		Mood:          mood,
 		Myself:        &defaultuserconf,
+		TestNotifies:  [][]string{},
+		TestReplies:   []*plotbot.BotReply{},
+		Users:         make(map[string]slack.User),
+		mood:          mood,
 	}
 
 	return bot
@@ -80,24 +82,28 @@ func (bot *Bot) ListenFor(conv *plotbot.Conversation) error {
 }
 
 func (bot *Bot) Reply(msg *plotbot.Message, reply string) {
-	log.Println("Replying:", reply)
+	bot.TestReplies = append(bot.TestReplies, msg.Reply(reply))
 }
 
 // ReplyMention replies with a @mention named prefixed, when replying in public. When replying in private, nothing is added.
 func (bot *Bot) ReplyMention(msg *plotbot.Message, reply string) {
-	log.Println("Replying:", reply)
+	bot.Reply(msg, msg.AtMentionIfPublic(reply))
 }
 
 func (bot *Bot) ReplyPrivately(msg *plotbot.Message, reply string) {
-	log.Println("Replying privately:", reply)
+	bot.TestReplies = append(bot.TestReplies, msg.ReplyPrivately(reply))
 }
 
 func (bot *Bot) Notify(room, color, msg string) {
-	log.Printf("Notify: %s\n", msg)
+	bot.TestNotifies = append(bot.TestNotifies, []string{room, color, msg})
 }
 
 func (bot *Bot) SendToChannel(channelName string, message string) {
-	log.Printf("Sending to channel %q: %q\n", channelName, message)
+	reply := &plotbot.BotReply{
+		To:   channelName,
+		Text: message,
+	}
+	bot.TestReplies = append(bot.TestReplies, reply)
 }
 
 func (bot *Bot) Nickname() string {
@@ -109,9 +115,26 @@ func (bot *Bot) AtMention() string {
 }
 
 func (bot *Bot) WithMood(happy string, hyper string) string {
-	if bot.Mood == plotbot.Happy {
+	if bot.Mood() == plotbot.Happy {
 		return happy
 	} else {
 		return hyper
+	}
+}
+
+func (bot *Bot) Mood() plotbot.Mood {
+	return bot.mood
+}
+
+func (bot *Bot) SetMood(mood plotbot.Mood) {
+	bot.mood = mood
+}
+
+func (bot *Bot) Id() string {
+	return bot.Myself.Id
+}
+
+func (bot *Bot) CloseConversation(conv *plotbot.Conversation) {
+	for {
 	}
 }

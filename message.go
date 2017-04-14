@@ -117,4 +117,16 @@ func (msg *Message) applyFromMe(bot *Bot) {
 	}
 }
 
+func (msg *Message) AtMentionIfPublic(reply string) string {
+	if msg.IsPrivate() {
+		return reply
+	} else {
+		prefix := ""
+		if msg.FromUser != nil {
+			prefix = fmt.Sprintf("<@%s> ", msg.FromUser.Name)
+		}
+		return fmt.Sprintf("%s%s", prefix, reply)
+	}
+}
+
 var reAtMention = regexp.MustCompile(`<@([A-Z0-9]+)(|([^>]+))>`)

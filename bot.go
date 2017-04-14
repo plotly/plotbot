@@ -18,6 +18,7 @@ import (
 type BotLike interface {
 	AtMention() string
 	CloseConversation(conv *Conversation)
+	Id() string
 	ListenFor(*Conversation) error
 	LoadConfig(interface{}) error
 	Mood() Mood
@@ -197,15 +198,7 @@ func (bot *Bot) Reply(msg *Message, reply string) {
 
 // ReplyMention replies with a @mention named prefixed, when replying in public. When replying in private, nothing is added.
 func (bot *Bot) ReplyMention(msg *Message, reply string) {
-	if msg.IsPrivate() {
-		bot.Reply(msg, reply)
-	} else {
-		prefix := ""
-		if msg.FromUser != nil {
-			prefix = fmt.Sprintf("<@%s> ", msg.FromUser.Name)
-		}
-		bot.Reply(msg, fmt.Sprintf("%s%s", prefix, reply))
-	}
+	bot.Reply(msg, msg.AtMentionIfPublic(reply))
 }
 
 func (bot *Bot) ReplyPrivately(msg *Message, reply string) {
@@ -597,4 +590,8 @@ func (bot *Bot) Mood() Mood {
 
 func (bot *Bot) SetMood(mood Mood) {
 	bot.mood = mood
+}
+
+func (bot *Bot) Id() string {
+	return bot.Myself.Id
 }
