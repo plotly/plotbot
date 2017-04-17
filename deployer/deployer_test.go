@@ -126,6 +126,12 @@ func TestCmdProcess(t *testing.T) {
 	if output != "" {
 		fmt.Println(output)
 	}
+
+	exitCode := os.Getenv("GO_CMD_PROCESS_EXIT")
+	i, err = strconv.Atoi(exitCode)
+	if err == nil {
+		os.Exit(i)
+	}
 }
 
 func TestCancelDeployNotRunning(t *testing.T) {
@@ -540,6 +546,126 @@ func TestAllowedProdBranches(t *testing.T) {
 
 	actual = replies[1].Text
 	expected = "your deploy was successful"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
+	}
+}
+
+func TestFailedGitFetch(t *testing.T) {
+	dep := newTestDep(
+		DeployerConfig{},
+		testutils.NewDefaultMockBot(),
+		&testutils.MockRunner{
+			ParseVars: func(c string, s ...string) []string {
+				args := testutils.Searchable(s)
+				if c == "git" && args.Contains("fetch") {
+					return []string{"GO_CMD_PROCESS_EXIT=99"}
+				}
+				return []string{}
+			},
+		})
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy to prod")
+	dep.ChatHandler(&conv, &msg)
+
+	_, err := captureProgress(dep, time.Millisecond*500)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 reply got %d", len(replies))
+	}
+
+	actual := replies[0].Text
+	expected := "Unable to pull from repo: Error executing git fetch: exit status 99"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
+	}
+}
+
+func TestFailedGitCheckout(t *testing.T) {
+	dep := newTestDep(
+		DeployerConfig{},
+		testutils.NewDefaultMockBot(),
+		&testutils.MockRunner{
+			ParseVars: func(c string, s ...string) []string {
+				args := testutils.Searchable(s)
+				if c == "git" && args.Contains("checkout") {
+					return []string{"GO_CMD_PROCESS_EXIT=99"}
+				}
+				return []string{}
+			},
+		})
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy to prod")
+	dep.ChatHandler(&conv, &msg)
+
+	_, err := captureProgress(dep, time.Millisecond*500)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 reply got %d", len(replies))
+	}
+
+	actual := replies[0].Text
+	expected := "Unable to pull from repo: exit status 99"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
+	}
+}
+
+func TestFailedAnsible(t *testing.T) {
+	dep := newTestDep(
+		DeployerConfig{},
+		testutils.NewDefaultMockBot(),
+		&testutils.MockRunner{
+			ParseVars: func(c string, s ...string) []string {
+				if c == "ansible-playbook" {
+					return []string{"GO_CMD_PROCESS_EXIT=99"}
+				}
+				return []string{}
+			},
+		})
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy to prod with tags: onions")
+	dep.ChatHandler(&conv, &msg)
+
+	progress, err := captureProgress(dep, time.Millisecond*500)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !progress.Contains("terminated") {
+		t.Errorf("expected progress %s to contain 'terminated'", progress)
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+
+	if len(replies) != 2 {
+		t.Fatalf("expected 2 replies got %d", len(replies))
+	}
+
+	actual := replies[1].Text
+	expected := "your deploy failed: exit status 99"
 	if !strings.Contains(actual, expected) {
 		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
 	}
