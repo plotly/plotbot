@@ -7,23 +7,33 @@ import (
 )
 
 type MockRunner struct {
-	jobs     [][]string
-	exitCode int64
+	Jobs        [][]string
+	ParseVars   func(string, ...string) []string
+	TestCmdName string
 }
 
 func (r MockRunner) Run(c string, s ...string) *exec.Cmd {
 
 	allc := append([]string{c}, s...)
-	r.jobs = append(r.jobs, allc)
+	r.Jobs = append(r.Jobs, allc)
 
-	cs := []string{"-test.run=TestCmdProcess", "--"}
-	cs = append(cs, allc...)
+	testcmd := r.TestCmdName
+	if testcmd == "" {
+		testcmd = "TestCmdProcess"
+	}
 
-	exitCodeVar := fmt.Sprintf("GO_CMD_PROCESS_EXIT_CODE=%s", r.exitCode)
+	cs := []string{fmt.Sprintf("-test.run=%s", testcmd)}
+	//	cs = append(cs, allc...)
 
 	// see https://npf.io/2015/06/testing-exec-command/
 	cmd := exec.Command(os.Args[0], cs...)
-	cmd.Env = []string{"GO_WANT_CMD_PROCESS=1", exitCodeVar}
+
+	env := []string{}
+	if r.ParseVars != nil {
+		env = r.ParseVars(c, s...)
+	}
+	env = append(env, "GO_WANT_CMD_PROCESS=1")
+	cmd.Env = env
 
 	return cmd
 }

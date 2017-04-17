@@ -208,7 +208,6 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		branch = params.Branch
 		cmdArgs = append(cmdArgs, "-e", fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch))
 	}
-
 	if err := dep.pullRepo(branch); err != nil {
 		errorMsg := fmt.Sprintf("Unable to pull from repo: %s. Aborting.", err)
 		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
@@ -217,7 +216,6 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	} else {
 		dep.pubLine(fmt.Sprintf("[deployer] Using latest revision of %s branch", branch))
 	}
-
 	//
 	// Launching deploy
 	//
@@ -236,13 +234,16 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	dep.pubLine(fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
 	cmd := dep.runner.Run(cmdArgs[0], cmdArgs[1:]...)
 	cmd.Dir = dep.config.RepositoryPath
-	cmd.Env = append(os.Environ(), "ANSIBLE_NOCOLOR=1")
+	env := append(os.Environ(), "ANSIBLE_NOCOLOR=1")
+	if cmd.Env != nil {
+		env = append(env, cmd.Env...)
+	}
+	cmd.Env = env
 
 	pty, err := pty.Start(cmd)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	dep.runningJob = &DeployJob{
 		process: cmd.Process,
 		params:  params,
@@ -252,7 +253,6 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 
 	go dep.manageDeployIo(pty)
 	go dep.manageKillProcess(pty)
-
 	if err := cmd.Wait(); err != nil {
 		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
 		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
@@ -260,7 +260,6 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		dep.pubLine("[deployer] terminated successfully")
 		dep.replyPersonnally(params, bot.WithMood("your deploy was successful", "your deploy was GREAT, you're great !"))
 	}
-
 	dep.runningJob.quit <- true
 	dep.runningJob = nil
 }
@@ -272,7 +271,6 @@ func (dep *Deployer) pullRepo(branch string) error {
 	if err != nil {
 		return fmt.Errorf("Error executing git fetch: %s", err)
 	}
-
 	cmd = dep.runner.Run("git", "checkout", fmt.Sprintf("origin/%s", branch))
 	cmd.Dir = dep.config.RepositoryPath
 	return cmd.Run()
