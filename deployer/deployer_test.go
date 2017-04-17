@@ -466,3 +466,81 @@ func TestJobAlreadyRunning(t *testing.T) {
 		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
 	}
 }
+
+func TestHelp(t *testing.T) {
+	dep := defaultTestDep(time.Second)
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy whats up?")
+	dep.ChatHandler(&conv, &msg)
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 replies got %d", len(replies))
+	}
+
+	actual := replies[0].Text
+	if !strings.Contains(strings.ToLower(actual), "usage") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "usage")
+	}
+	if !strings.Contains(strings.ToLower(actual), "examples") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "examples")
+	}
+}
+
+func TestAllowedProdBranches(t *testing.T) {
+	dep := defaultTestDep(time.Second * 0)
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy cats to prod")
+	dep.ChatHandler(&conv, &msg)
+
+	_, err := captureProgress(dep, time.Millisecond*500)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 replies got %d", len(replies))
+	}
+
+	actual := replies[0].Text
+	expected := "cats is not a legal branch for prod"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
+	}
+
+	clearMocks(dep)
+	conv = plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg = testutils.ToBotMsg(dep.bot, "deploy master to prod")
+	dep.ChatHandler(&conv, &msg)
+
+	_, err = captureProgress(dep, time.Millisecond*500)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bot = dep.bot.(*testutils.MockBot)
+	replies = bot.TestReplies
+
+	if len(replies) != 2 {
+		t.Fatalf("expected 2 replies got %d", len(replies))
+	}
+
+	actual = replies[1].Text
+	expected = "your deploy was successful"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
+	}
+}
