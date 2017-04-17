@@ -164,7 +164,8 @@ func TestStageDeploy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectContain := testutils.Searchable{"ansible-playbook -i tools/",
+	expectContain := testutils.Searchable{
+		"ansible-playbook -i tools/",
 		"--tags updt_streambed",
 		"{{ansible-output}}",
 		"terminated successfully",
@@ -351,5 +352,117 @@ func TestLockUnlock(t *testing.T) {
 
 	if len(runner.Jobs) != 3 {
 		t.Fatalf("expected 3 job found %d", len(runner.Jobs))
+	}
+}
+
+func TestCancelDeploy(t *testing.T) {
+
+	// set up for long running deploy
+	dep := defaultTestDep(time.Second * 5)
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
+	dep.ChatHandler(&conv, &msg)
+
+	time.Sleep(time.Millisecond * 500)
+
+	conv = plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	fromUser := "rodoh"
+	msg = testutils.ToBotMsgFromUser(dep.bot, "cancel deploy", fromUser)
+	dep.ChatHandler(&conv, &msg)
+
+	progress, err := captureProgress(dep, time.Second*4)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectContain := testutils.Searchable{
+		"ansible-playbook",
+		"--tags updt_streambed",
+		"terminated with error: signal: interrupt",
+	}
+	if !progress.ContainsAll(expectContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	expectNotToContain := testutils.Searchable{
+		"terminated successfully",
+		"{{ansible-output}}",
+	}
+	if progress.ContainsAny(expectNotToContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	// 3 jobs should have run
+	runner := dep.runner.(*testutils.MockRunner)
+	if len(runner.Jobs) != 3 {
+		t.Fatalf("expected 3 job found %d", len(runner.Jobs))
+	}
+
+	// should have made 3 replies
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 3 {
+		t.Fatalf("expected 3 replies found %d", len(bot.TestReplies))
+	}
+
+	actual := bot.TestReplies[1].Text
+	expected := "deploy: Sending Interrupt signal"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[2].Text
+	expected = fmt.Sprintf("<@%s> your deploy failed: signal: interrupt", fromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+	}
+}
+
+func TestJobAlreadyRunning(t *testing.T) {
+	dep := defaultTestDep(time.Second)
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
+	dep.ChatHandler(&conv, &msg)
+
+	time.Sleep(time.Millisecond * 200)
+
+	conv = plotbot.Conversation{
+		Bot: dep.bot,
+	}
+
+	fromUser := "rodoh"
+	msg = testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", fromUser)
+	dep.ChatHandler(&conv, &msg)
+
+	_, err := captureProgress(dep, time.Second*2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+	if len(replies) != 3 {
+		t.Fatalf("expected 3 replies got %d", len(replies))
+	}
+
+	actual := replies[1].Text
+	expected := "Deploy currently running"
+	if !(strings.Contains(actual, fromUser) && strings.Contains(actual, expected)) {
+		t.Errorf("expected reply '%s' to contain '%s' and '%s'", actual, fromUser, expected)
+	}
+
+	actual = replies[2].Text
+	expected = "deploy was successful"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
 	}
 }

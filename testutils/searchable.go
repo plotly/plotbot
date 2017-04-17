@@ -27,6 +27,16 @@ func (ps Searchable) ContainsAll(ss ...string) bool {
 	return true
 }
 
+func (ps Searchable) ContainsAny(ss ...string) bool {
+	for _, s := range ss {
+		if ps.Contains(s) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (ps Searchable) String() string {
 	return fmt.Sprintf("[%s]", strings.Join(ps, ", "))
 }
