@@ -42,7 +42,7 @@ type Runnable interface {
 
 type Runner struct{}
 
-func (r Runner) Run(cmd string, args ...string) *exec.Cmd {
+func (r *Runner) Run(cmd string, args ...string) *exec.Cmd {
 	return exec.Command(cmd, args...)
 }
 
@@ -60,7 +60,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	dep.progress = make(chan string, 1000)
 	dep.config = &conf.Deployer
 	dep.env = os.Getenv("PLOTLY_ENV")
-	dep.runner = Runner{}
+	dep.runner = &Runner{}
 
 	if dep.env == "" {
 		dep.env = "debug"

@@ -48,7 +48,7 @@ func newTestDep(dconf DeployerConfig, bot plotbot.BotLike) *Deployer {
 	return &Deployer{
 		config: &defaultdconf,
 		bot:    bot,
-		runner: testutils.MockRunner{
+		runner: &testutils.MockRunner{
 			ParseVars: func(c string, s ...string) []string {
 				switch c {
 				case "ansible-playbook":
@@ -69,38 +69,11 @@ func defaultTestDep() *Deployer {
 	return newTestDep(DeployerConfig{}, testutils.NewDefaultMockBot())
 }
 
-type Progress []string
+func captureProgress(dep *Deployer, waitTime time.Duration) (testutils.Searchable, error) {
 
-func (ps Progress) Contains(s string) bool {
-	for _, p := range ps {
-		if strings.Contains(p, s) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (ps Progress) ContainsAll(ss ...string) bool {
-	for _, s := range ss {
-		if !ps.Contains(s) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (ps Progress) String() string {
-	return fmt.Sprintf("[%s]", strings.Join(ps, ", "))
-}
-
-func captureProgress(dep *Deployer) (Progress, error) {
-
-	waitTime := time.Second * 2
 	timer := time.NewTimer(waitTime)
 	done := make(chan bool, 2)
-	progress := Progress{}
+	progress := testutils.Searchable{}
 	for {
 		select {
 		case <-timer.C:
@@ -126,6 +99,11 @@ func captureProgress(dep *Deployer) (Progress, error) {
 			}
 		}
 	}
+}
+
+func clearMocks(dep *Deployer) {
+	testutils.ClearMockBot(dep.bot.(*testutils.MockBot))
+	testutils.ClearMockRunner(dep.runner.(*testutils.MockRunner))
 }
 
 // This test is called by the the mock cmd.Run() or pty.Start(cmd)
@@ -157,7 +135,7 @@ func TestCancelDeployNotRunning(t *testing.T) {
 
 	dep.ChatHandler(&conv, &msg)
 
-	bot := dep.bot.(*testutils.Bot)
+	bot := dep.bot.(*testutils.MockBot)
 	if len(bot.TestReplies) != 1 {
 		t.Fatalf("expected 1 reply found %d", len(bot.TestReplies))
 	}
@@ -178,12 +156,12 @@ func TestStageDeploy(t *testing.T) {
 	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
 
 	dep.ChatHandler(&conv, &msg)
-	progress, err := captureProgress(dep)
+	progress, err := captureProgress(dep, time.Second*2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectContain := Progress{"ansible-playbook -i tools/",
+	expectContain := testutils.Searchable{"ansible-playbook -i tools/",
 		"--tags updt_streambed",
 		"{{ansible-output}}",
 		"terminated successfully",
@@ -194,20 +172,77 @@ func TestStageDeploy(t *testing.T) {
 			expectContain.String())
 	}
 
-	bot := dep.bot.(*testutils.Bot)
+	runner := dep.runner.(*testutils.MockRunner)
+	if len(runner.Jobs) != 3 {
+		t.Fatalf("expected 3 job found %d", len(runner.Jobs))
+	}
+
+	if !(runner.Jobs[0].Contains("git") && runner.Jobs[1].Contains("git")) {
+		t.Fatalf("expected first two jobs to be git jobs (fetch then pull)")
+	}
+
+	if !runner.Jobs[2].Contains("ansible-playbook") {
+		t.Fatalf("expected last job to be ansible job")
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
 	if len(bot.TestReplies) != 2 {
 		t.Fatalf("expected 2 replies found %d", len(bot.TestReplies))
 	}
 
 	actual := bot.TestReplies[0].Text
-	expected := "<@hodor> deploying"
+	expected := fmt.Sprintf("<@%s> deploying", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
 		t.Errorf("exected '%s' to contain '%s'", expected, actual)
 	}
 
 	actual = bot.TestReplies[1].Text
-	expected = "<@hodor> your deploy was successful"
+	expected = fmt.Sprintf("<@%s> your deploy was successful", testutils.DefaultFromUser)
 	if actual != expected {
 		t.Errorf("exected '%s' but found '%s'", expected, actual)
 	}
 }
+
+func TestProdDeployWithTags(t *testing.T) {
+	dep := defaultTestDep()
+
+	conv := plotbot.Conversation{
+		Bot: dep.bot,
+	}
+	msg := testutils.ToBotMsg(dep.bot, "deploy to prod with tags: umwelt")
+
+	dep.ChatHandler(&conv, &msg)
+	progress, err := captureProgress(dep, time.Second*2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectContain := testutils.Searchable{"ansible-playbook -i tools/",
+		"--tags umwelt",
+		"{{ansible-output}}",
+		"terminated successfully",
+	}
+
+	if !progress.ContainsAll(expectContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 2 {
+		t.Fatalf("expected 2 replies found %d", len(bot.TestReplies))
+	}
+
+	actual := bot.TestReplies[0].Text
+	expected := fmt.Sprintf("<@%s> deploying", testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[1].Text
+	expected = fmt.Sprintf("<@%s> your deploy was successful", testutils.DefaultFromUser)
+	if actual != expected {
+		t.Errorf("exected '%s' but found '%s'", expected, actual)
+	}
+}
+

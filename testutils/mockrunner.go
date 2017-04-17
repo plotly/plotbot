@@ -7,15 +7,19 @@ import (
 )
 
 type MockRunner struct {
-	Jobs        [][]string
+	Jobs        []Searchable
 	ParseVars   func(string, ...string) []string
 	TestCmdName string
 }
 
-func (r MockRunner) Run(c string, s ...string) *exec.Cmd {
+func ClearMockRunner(r *MockRunner) {
+	r.Jobs = []Searchable{}
+}
+
+func (r *MockRunner) Run(c string, s ...string) *exec.Cmd {
 
 	allc := append([]string{c}, s...)
-	r.Jobs = append(r.Jobs, allc)
+	r.Jobs = append(r.Jobs, Searchable(allc))
 
 	testcmd := r.TestCmdName
 	if testcmd == "" {
