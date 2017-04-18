@@ -16,6 +16,7 @@ func ClearMockRunner(r *MockRunner) {
 	r.Jobs = []Searchable{}
 }
 
+// see https://npf.io/2015/06/testing-exec-command/
 func (r *MockRunner) Run(c string, s ...string) *exec.Cmd {
 
 	allc := append([]string{c}, s...)
@@ -27,9 +28,6 @@ func (r *MockRunner) Run(c string, s ...string) *exec.Cmd {
 	}
 
 	cs := []string{fmt.Sprintf("-test.run=%s", testcmd)}
-	//	cs = append(cs, allc...)
-
-	// see https://npf.io/2015/06/testing-exec-command/
 	cmd := exec.Command(os.Args[0], cs...)
 
 	env := []string{}
