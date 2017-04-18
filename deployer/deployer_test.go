@@ -272,7 +272,7 @@ func TestLockUnlock(t *testing.T) {
 	// there should be no progress
 	_, err := captureProgress(dep, time.Millisecond*500)
 	if err == nil {
-		t.Errorf("expected timout error while capturing non-existent progress")
+		t.Errorf("expected timeout error while capturing non-existent progress")
 	}
 
 	runner := dep.runner.(*testutils.MockRunner)
@@ -302,7 +302,7 @@ func TestLockUnlock(t *testing.T) {
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err == nil {
-		t.Errorf("expected timout error while capturing non-existent progress")
+		t.Errorf("expected timeout error while capturing non-existent progress")
 	}
 
 	if len(runner.Jobs) != 0 {
@@ -330,7 +330,7 @@ func TestLockUnlock(t *testing.T) {
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err == nil {
-		t.Errorf("expected timout error while capturing non-existent progress")
+		t.Errorf("expected timeout error while capturing non-existent progress")
 	}
 
 	if len(runner.Jobs) != 0 {
