@@ -22,7 +22,6 @@ type BotLike interface {
 	ListenFor(*Conversation) error
 	LoadConfig(interface{}) error
 	Mood() Mood
-	Nickname() string
 	Notify(string, string, string)
 	Reply(*Message, string)
 	ReplyMention(*Message, string)
@@ -570,10 +569,6 @@ func (bot *Bot) GetChannelByName(name string) *slack.Channel {
 		}
 	}
 	return nil
-}
-
-func (bot *Bot) Nickname() string {
-	return bot.Config.Nickname
 }
 
 func (bot *Bot) AtMention() string {

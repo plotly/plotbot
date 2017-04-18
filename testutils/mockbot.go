@@ -111,10 +111,6 @@ func (bot *MockBot) SendToChannel(channelName string, message string) {
 	bot.TestReplies = append(bot.TestReplies, reply)
 }
 
-func (bot *MockBot) Nickname() string {
-	return bot.Config.Nickname
-}
-
 func (bot *MockBot) AtMention() string {
 	return fmt.Sprintf("@%s:", bot.Myself.Name)
 }
