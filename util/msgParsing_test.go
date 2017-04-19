@@ -44,7 +44,7 @@ func TestGetDaysFromQuery(t *testing.T) {
 		t.Error(query.toString())
 	}
 
-	if query := makeQuery("plot, give me a report for the last week", 7); query.notOk() {
+	if query := makeQuery("plot, give me a report for the last week", DEFAULT_DAYS); query.notOk() {
 		t.Error(query.toString())
 	}
 
@@ -52,15 +52,15 @@ func TestGetDaysFromQuery(t *testing.T) {
 		t.Error(query.toString())
 	}
 
-	if query := makeQuery("plot, give me a report for today", 0); query.notOk() {
+	if query := makeQuery("plot, give me a report for today", DEFAULT_DAYS); query.notOk() {
 		t.Error(query.toString())
 	}
 
-	if query := makeQuery("first as tragedy, second as farce", 0); query.notOk() {
+	if query := makeQuery("first as tragedy, second as farce", DEFAULT_DAYS); query.notOk() {
 		t.Error(query.toString())
 	}
 
-	if query := makeQuery("plot, give me a report for this week", 7); query.notOk() {
+	if query := makeQuery("plot, give me a report for this week", DEFAULT_DAYS); query.notOk() {
 		t.Error(query.toString())
 	}
 

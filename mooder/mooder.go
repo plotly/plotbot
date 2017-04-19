@@ -33,7 +33,7 @@ func (mooder *Mooder) SetupMoodChanger() {
 			newMood = plotbot.Hyper
 		}
 
-		bot.Mood = newMood
+		bot.SetMood(newMood)
 
 		//bot.SendToChannel(bot.Config.GeneralChannel, bot.WithMood("I'm quite happy today.", "I can haz!! It's going to be a great one today!!"))
 

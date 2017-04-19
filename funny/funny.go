@@ -25,7 +25,7 @@ func (funny *Funny) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message
 	if msg.MentionsMe {
 		if msg.Contains("you're funny") {
 
-			if bot.Mood == plotbot.Happy {
+			if bot.Mood() == plotbot.Happy {
 				conv.Reply(msg, "_blush_")
 			} else {
 				conv.Reply(msg, "here's another one")

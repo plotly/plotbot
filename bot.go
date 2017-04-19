@@ -15,6 +15,22 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+type BotLike interface {
+	AtMention() string
+	CloseConversation(conv *Conversation)
+	Id() string
+	ListenFor(*Conversation) error
+	LoadConfig(interface{}) error
+	Mood() Mood
+	Notify(string, string, string)
+	Reply(*Message, string)
+	ReplyMention(*Message, string)
+	ReplyPrivately(*Message, string)
+	SendToChannel(string, string)
+	SetMood(Mood)
+	WithMood(string, string) string
+}
+
 type Bot struct {
 	// Global bot configuration
 	configFile string
@@ -41,7 +57,7 @@ type Bot struct {
 
 	// Other features
 	WebServer WebServer
-	Mood      Mood
+	mood      Mood
 }
 
 func New(configFile string) *Bot {
@@ -181,15 +197,7 @@ func (bot *Bot) Reply(msg *Message, reply string) {
 
 // ReplyMention replies with a @mention named prefixed, when replying in public. When replying in private, nothing is added.
 func (bot *Bot) ReplyMention(msg *Message, reply string) {
-	if msg.IsPrivate() {
-		bot.Reply(msg, reply)
-	} else {
-		prefix := ""
-		if msg.FromUser != nil {
-			prefix = fmt.Sprintf("<@%s> ", msg.FromUser.Name)
-		}
-		bot.Reply(msg, fmt.Sprintf("%s%s", prefix, reply))
-	}
+	bot.Reply(msg, msg.AtMentionIfPublic(reply))
 }
 
 func (bot *Bot) ReplyPrivately(msg *Message, reply string) {
@@ -561,4 +569,24 @@ func (bot *Bot) GetChannelByName(name string) *slack.Channel {
 		}
 	}
 	return nil
+}
+
+func (bot *Bot) AtMention() string {
+	return fmt.Sprintf("@%s:", bot.Myself.Name)
+}
+
+func (bot *Bot) CloseConversation(conv *Conversation) {
+	bot.delConversationCh <- conv
+}
+
+func (bot *Bot) Mood() Mood {
+	return bot.mood
+}
+
+func (bot *Bot) SetMood(mood Mood) {
+	bot.mood = mood
+}
+
+func (bot *Bot) Id() string {
+	return bot.Myself.Id
 }

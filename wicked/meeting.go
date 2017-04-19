@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/plotly/plotbot"
 	"github.com/nlopes/slack"
+	"github.com/plotly/plotbot"
 )
 
 func init() {
@@ -44,7 +44,7 @@ type Meeting struct {
 	doneCh     chan bool
 }
 
-func NewMeeting(id string, user *slack.User, goal string, bot *plotbot.Bot, channel *slack.Channel, uuidNow time.Time) *Meeting {
+func NewMeeting(id string, user *slack.User, goal string, bot plotbot.BotLike, channel *slack.Channel, uuidNow time.Time) *Meeting {
 	meeting := &Meeting{}
 	meeting.ID = id
 	meeting.Channel = channel.Name

@@ -3,13 +3,13 @@ package wicked
 import (
 	"testing"
 
-	"github.com/plotly/plotbot"
 	"github.com/nlopes/slack"
+	"github.com/plotly/plotbot"
 )
 
 func TestFindNextRoom(t *testing.T) {
 	w := &Wicked{
-		bot: &slick.Bot{Channels: map[string]slack.Channel{
+		bot: &plotbot.Bot{Channels: map[string]slack.Channel{
 			"room2": {BaseChannel: slack.BaseChannel{Id: "room2"}, Name: "room2"},
 			"room3": {BaseChannel: slack.BaseChannel{Id: "room3"}, Name: "room3"},
 		}},

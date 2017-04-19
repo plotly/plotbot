@@ -5,12 +5,14 @@ import (
 	"strconv"
 )
 
+var DEFAULT_DAYS = 7
+
 func GetDaysFromQuery(text string) int {
 
 	re := regexp.MustCompile(".*(?:last|past|this) (\\d+)?\\s?(day|week).*")
 	hits := re.FindStringSubmatch(text)
 
-	days := 7
+	days := DEFAULT_DAYS
 	var weeks int
 	var err error
 

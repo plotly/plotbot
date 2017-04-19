@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/plotly/plotbot"
 	"github.com/nlopes/slack"
+	"github.com/plotly/plotbot"
 )
 
 type Wicked struct {

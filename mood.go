@@ -8,7 +8,7 @@ const (
 )
 
 func (bot *Bot) WithMood(happy, hyper string) string {
-	if bot.Mood == Happy {
+	if bot.Mood() == Happy {
 		return happy
 	} else {
 		return hyper

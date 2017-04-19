@@ -18,8 +18,9 @@ import (
 )
 
 type Deployer struct {
+	runner     Runnable
 	runningJob *DeployJob
-	bot        *plotbot.Bot
+	bot        plotbot.BotLike
 	env        string
 	config     *DeployerConfig
 	progress   chan string
@@ -33,6 +34,16 @@ type DeployerConfig struct {
 	ProgressRoom        string   `json:"progress_room"`
 	DefaultBranch       string   `json:"default_branch"`
 	AllowedProdBranches []string `json:"allowed_prod_branches"`
+}
+
+type Runnable interface {
+	Run(string, ...string) *exec.Cmd
+}
+
+type Runner struct{}
+
+func (r *Runner) Run(cmd string, args ...string) *exec.Cmd {
+	return exec.Command(cmd, args...)
 }
 
 func init() {
@@ -49,6 +60,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	dep.progress = make(chan string, 1000)
 	dep.config = &conf.Deployer
 	dep.env = os.Getenv("PLOTLY_ENV")
+	dep.runner = &Runner{}
 
 	if dep.env == "" {
 		dep.env = "debug"
@@ -95,7 +107,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
 		if dep.lockedBy != "" {
-			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  Unlock with '%s, unlock deployment' if they're OK with it.", dep.lockedBy, dep.bot.Config.Nickname))
+			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  Unlock with '%s, unlock deployment' if they're OK with it.", dep.lockedBy, dep.bot.AtMention()))
 			return
 		}
 		if dep.runningJob != nil {
@@ -144,10 +156,10 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		bot.Notify(dep.config.AnnounceRoom, "#00ff00", fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name))
 	} else if msg.Contains("lock deploy") {
 		dep.lockedBy = msg.FromUser.Name
-		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.Config.Nickname))
+		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.AtMention()))
 		bot.Notify(dep.config.AnnounceRoom, "#ff0000", fmt.Sprintf("%s has locked deployment", dep.lockedBy))
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
-		mention := dep.bot.MentionPrefix
+		mention := dep.bot.AtMention()
 		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
 *Examples:*
 • %s please deploy to prod
@@ -196,7 +208,6 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		branch = params.Branch
 		cmdArgs = append(cmdArgs, "-e", fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch))
 	}
-
 	if err := dep.pullRepo(branch); err != nil {
 		errorMsg := fmt.Sprintf("Unable to pull from repo: %s. Aborting.", err)
 		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
@@ -205,7 +216,6 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	} else {
 		dep.pubLine(fmt.Sprintf("[deployer] Using latest revision of %s branch", branch))
 	}
-
 	//
 	// Launching deploy
 	//
@@ -222,15 +232,18 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	}
 
 	dep.pubLine(fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
-	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	cmd := dep.runner.Run(cmdArgs[0], cmdArgs[1:]...)
 	cmd.Dir = dep.config.RepositoryPath
-	cmd.Env = append(os.Environ(), "ANSIBLE_NOCOLOR=1")
+	env := append(os.Environ(), "ANSIBLE_NOCOLOR=1")
+	if cmd.Env != nil {
+		env = append(env, cmd.Env...)
+	}
+	cmd.Env = env
 
 	pty, err := pty.Start(cmd)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	dep.runningJob = &DeployJob{
 		process: cmd.Process,
 		params:  params,
@@ -240,7 +253,6 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 
 	go dep.manageDeployIo(pty)
 	go dep.manageKillProcess(pty)
-
 	if err := cmd.Wait(); err != nil {
 		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
 		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
@@ -248,20 +260,18 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		dep.pubLine("[deployer] terminated successfully")
 		dep.replyPersonnally(params, bot.WithMood("your deploy was successful", "your deploy was GREAT, you're great !"))
 	}
-
 	dep.runningJob.quit <- true
 	dep.runningJob = nil
 }
 
 func (dep *Deployer) pullRepo(branch string) error {
-	cmd := exec.Command("git", "fetch")
+	cmd := dep.runner.Run("git", "fetch")
 	cmd.Dir = dep.config.RepositoryPath
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("Error executing git fetch: %s", err)
 	}
-
-	cmd = exec.Command("git", "checkout", fmt.Sprintf("origin/%s", branch))
+	cmd = dep.runner.Run("git", "checkout", fmt.Sprintf("origin/%s", branch))
 	cmd.Dir = dep.config.RepositoryPath
 	return cmd.Run()
 }
