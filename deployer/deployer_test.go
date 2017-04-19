@@ -12,6 +12,7 @@ import (
 
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/testutils"
+	"github.com/plotly/plotbot/util"
 )
 
 func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Deployer {
@@ -72,11 +73,11 @@ func defaultTestDep(cmdDelay time.Duration) *Deployer {
 		})
 }
 
-func captureProgress(dep *Deployer, waitTime time.Duration) (testutils.Searchable, error) {
+func captureProgress(dep *Deployer, waitTime time.Duration) (util.Searchable, error) {
 
 	timer := time.NewTimer(waitTime)
 	done := make(chan bool, 2)
-	progress := testutils.Searchable{}
+	progress := util.Searchable{}
 	for {
 		select {
 		case <-timer.C:
@@ -170,7 +171,7 @@ func TestStageDeploy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectContain := testutils.Searchable{
+	expectContain := util.Searchable{
 		"ansible-playbook -i tools/",
 		"--tags updt_streambed",
 		"{{ansible-output}}",
@@ -227,7 +228,7 @@ func TestProdDeployWithTags(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectContain := testutils.Searchable{"ansible-playbook -i tools/",
+	expectContain := util.Searchable{"ansible-playbook -i tools/",
 		"--tags umwelt",
 		"{{ansible-output}}",
 		"terminated successfully",
@@ -386,7 +387,7 @@ func TestCancelDeploy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectContain := testutils.Searchable{
+	expectContain := util.Searchable{
 		"ansible-playbook",
 		"--tags updt_streambed",
 		"terminated with error: signal: interrupt",
@@ -396,7 +397,7 @@ func TestCancelDeploy(t *testing.T) {
 			expectContain.String())
 	}
 
-	expectNotToContain := testutils.Searchable{
+	expectNotToContain := util.Searchable{
 		"terminated successfully",
 		"{{ansible-output}}",
 	}
@@ -557,7 +558,7 @@ func TestFailedGitFetch(t *testing.T) {
 		testutils.NewDefaultMockBot(),
 		&testutils.MockRunner{
 			ParseVars: func(c string, s ...string) []string {
-				args := testutils.Searchable(s)
+				args := util.Searchable(s)
 				if c == "git" && args.Contains("fetch") {
 					return []string{"GO_CMD_PROCESS_EXIT=99"}
 				}
@@ -596,7 +597,7 @@ func TestFailedGitCheckout(t *testing.T) {
 		testutils.NewDefaultMockBot(),
 		&testutils.MockRunner{
 			ParseVars: func(c string, s ...string) []string {
-				args := testutils.Searchable(s)
+				args := util.Searchable(s)
 				if c == "git" && args.Contains("checkout") {
 					return []string{"GO_CMD_PROCESS_EXIT=99"}
 				}
