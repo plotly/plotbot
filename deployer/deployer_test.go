@@ -137,13 +137,8 @@ func TestCmdProcess(t *testing.T) {
 
 func TestCancelDeployNotRunning(t *testing.T) {
 	dep := defaultTestDep(time.Second)
-
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "cancel deploy")
-
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "cancel deploy"))
 
 	bot := dep.bot.(*testutils.MockBot)
 	if len(bot.TestReplies) != 1 {
@@ -159,13 +154,9 @@ func TestCancelDeployNotRunning(t *testing.T) {
 
 func TestStageDeploy(t *testing.T) {
 	dep := defaultTestDep(time.Second)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to stage"))
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
-
-	dep.ChatHandler(&conv, &msg)
 	progress, err := captureProgress(dep, time.Second*2)
 	if err != nil {
 		t.Fatal(err)
@@ -216,13 +207,9 @@ func TestStageDeploy(t *testing.T) {
 
 func TestProdDeployWithTags(t *testing.T) {
 	dep := defaultTestDep(time.Second)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod with tags: umwelt"))
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod with tags: umwelt")
-
-	dep.ChatHandler(&conv, &msg)
 	progress, err := captureProgress(dep, time.Second*2)
 	if err != nil {
 		t.Fatal(err)
@@ -262,13 +249,8 @@ func TestLockUnlock(t *testing.T) {
 	// First test locking - set command delay to 0 so we can wait for progress
 	// on a shorter interval.
 	dep := defaultTestDep(time.Second * 0)
-
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
-	msg := testutils.ToBotMsg(dep.bot, "please lock deployment")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "please lock deployment"))
 
 	// there should be no progress
 	_, err := captureProgress(dep, time.Millisecond*500)
@@ -294,12 +276,8 @@ func TestLockUnlock(t *testing.T) {
 
 	// Then make sure a deploy fails while locked
 	clearMocks(dep)
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
-	msg = testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", "rodoh")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", "rodoh"))
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err == nil {
@@ -322,12 +300,8 @@ func TestLockUnlock(t *testing.T) {
 
 	// Unlock deployment
 	clearMocks(dep)
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
-	msg = testutils.ToBotMsg(dep.bot, "unlock deployment")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "unlock deployment"))
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err == nil {
@@ -349,12 +323,8 @@ func TestLockUnlock(t *testing.T) {
 	}
 
 	// Finally make sure we can now deploy
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg = testutils.ToBotMsg(dep.bot, "deploy to prod")
-
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod"))
 	captureProgress(dep, time.Millisecond*500)
 
 	if len(runner.Jobs) != 3 {
@@ -367,20 +337,14 @@ func TestCancelDeploy(t *testing.T) {
 	// set up for long running deploy
 	dep := defaultTestDep(time.Second * 5)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to stage"))
 
 	time.Sleep(time.Millisecond * 500)
 
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
 	fromUser := "rodoh"
-	msg = testutils.ToBotMsgFromUser(dep.bot, "cancel deploy", fromUser)
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "cancel deploy", fromUser))
 
 	progress, err := captureProgress(dep, time.Second*4)
 	if err != nil {
@@ -402,7 +366,7 @@ func TestCancelDeploy(t *testing.T) {
 		"{{ansible-output}}",
 	}
 	if progress.ContainsAny(expectNotToContain...) {
-		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+		t.Errorf("expected progress %s not to contain any of %s", progress.String(),
 			expectContain.String())
 	}
 
@@ -421,34 +385,28 @@ func TestCancelDeploy(t *testing.T) {
 	actual := bot.TestReplies[1].Text
 	expected := "deploy: Sending Interrupt signal"
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("exected '%s' to contain '%s'", actual, expected)
 	}
 
 	actual = bot.TestReplies[2].Text
-	expected = fmt.Sprintf("<@%s> your deploy failed: signal: interrupt", fromUser)
+	expected = fmt.Sprintf("<@%s> your deploy failed: signal: interrupt",
+		testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("exected '%s' to contain '%s'", actual, expected)
 	}
 }
 
 func TestJobAlreadyRunning(t *testing.T) {
 	dep := defaultTestDep(time.Second)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to stage"))
 
 	time.Sleep(time.Millisecond * 200)
 
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
 	fromUser := "rodoh"
-	msg = testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", fromUser)
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", fromUser))
 
 	_, err := captureProgress(dep, time.Second*2)
 	if err != nil {
@@ -477,11 +435,8 @@ func TestJobAlreadyRunning(t *testing.T) {
 func TestHelp(t *testing.T) {
 	dep := defaultTestDep(time.Second)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy whats up?")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy whats up?"))
 
 	bot := dep.bot.(*testutils.MockBot)
 	replies := bot.TestReplies
@@ -502,11 +457,8 @@ func TestHelp(t *testing.T) {
 func TestAllowedProdBranches(t *testing.T) {
 	dep := defaultTestDep(time.Second * 0)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy cats to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy cats to prod"))
 
 	_, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -527,11 +479,8 @@ func TestAllowedProdBranches(t *testing.T) {
 	}
 
 	clearMocks(dep)
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg = testutils.ToBotMsg(dep.bot, "deploy master to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy master to prod"))
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -566,11 +515,8 @@ func TestFailedGitFetch(t *testing.T) {
 			},
 		})
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod"))
 
 	_, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -605,11 +551,8 @@ func TestFailedGitCheckout(t *testing.T) {
 			},
 		})
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod"))
 
 	_, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -643,11 +586,8 @@ func TestFailedAnsible(t *testing.T) {
 			},
 		})
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod with tags: onions")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod with tags: onions"))
 
 	progress, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
