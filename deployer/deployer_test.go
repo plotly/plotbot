@@ -726,3 +726,28 @@ func TestRunPlaybookConfirmationSuccess(t *testing.T) {
 		t.Errorf("expected '%s' but found '%s'", actual, expected)
 	}
 }
+
+func TestRunHelp(t *testing.T) {
+	dep := defaultTestDep(time.Second)
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "run help"))
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 replies got %d", len(replies))
+	}
+
+	actual := replies[0].Text
+	if !strings.Contains(strings.ToLower(actual), "usage") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "usage")
+	}
+	if !strings.Contains(strings.ToLower(actual), "examples") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "examples")
+	}
+	if !strings.Contains(strings.ToLower(actual), "postgres_failover") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "examples")
+	}
+}

@@ -18,15 +18,42 @@ import (
 	"github.com/plotly/plotbot/util"
 )
 
-var helpText = `*Usage:* %s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
+func deployHelp(botName string) string {
+	t := `*Usage:* %[1]s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
 *Examples:*
-• %s please deploy to prod
-• %s deploy thing-to-test to stage
-• %s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
+• %[1]s please deploy to prod
+• %[1]s deploy thing-to-test to stage
+• %[1]s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
 *Other commands:*
-• %s what's in the pipe? - show what's waiting to be deployed to prod
-• %s lock deployment - prevent deployment until it's unlocked
-• %s cancel deploy - cancel the currently running deployment`
+• %[1]s what's in the pipe? - show what's waiting to be deployed to prod
+• %[1]s lock deployment - prevent deployment until it's unlocked
+• %[1]s cancel deploy - cancel the currently running deployment
+• %[1]s run help - show help on running specific playbooks in an environment`
+	return fmt.Sprintf(t, botName)
+}
+
+func runHelp(botName, repoPath string) string {
+	t := `*Usage:* %[1]s [please|insert reverence] run [<playbook suffix>] in <environment> [, tags: <ansible-playbook tags>, ..., ...]
+*Examples:*
+• %[1]s run postgres_failover on prod
+• %[1]s run postgres_recovery on stage with tags: everything_is_broken`
+
+	playbooks, err := listAllowedPlaybooks(repoPath)
+	if err == nil && len(playbooks) > 0 {
+		t = t + fmt.Sprintf("\n*Available commands:*\n• %s",
+			strings.Join(playbooks, "\n• "))
+	}
+
+	return fmt.Sprintf(t, botName)
+}
+
+var DEFAULT_CONFIRM_TIMEOUT = 30 * time.Second
+var CONFIRM_PLAYBOOKS = util.Searchable{
+	"postgres_recovery", "postgres_failover"}
+
+var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
+
+var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
 
 type Deployer struct {
 	runner         Runnable
@@ -233,10 +260,10 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			fmt.Sprintf("%s has locked deployment", dep.lockedBy))
 
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
-		mention := dep.bot.AtMention()
-		conv.Reply(msg, fmt.Sprintf(
-			helpText, mention, mention, mention, mention, mention, mention, mention,
-		))
+		conv.Reply(msg, deployHelp(dep.bot.AtMention()))
+
+	} else if msg.Contains("run") && msg.ContainsAny([]string{"how", "help"}) {
+		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.RepositoryPath))
 
 	} else if dep.confirmJob != nil {
 		waitingFor := dep.confirmJob.params.InitiatedBy
