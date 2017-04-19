@@ -2,27 +2,19 @@ package deployer
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/plotly/plotbot"
 )
 
 type DeployParams struct {
+	Playbook        string
 	Environment     string
 	Branch          string
 	Tags            string
 	InitiatedBy     string
 	From            string
 	initiatedByChat *plotbot.Message
-}
-
-// ParsedTags returns *default* or user-specified tags
-func (p *DeployParams) ParsedTags() string {
-	tags := strings.Replace(p.Tags, " ", "", -1)
-	if tags == "" {
-		tags = "updt_streambed"
-	}
-	return tags
+	Confirm         bool
 }
 
 func (p *DeployParams) String() string {
@@ -31,7 +23,7 @@ func (p *DeployParams) String() string {
 		branch = "[default]"
 	}
 
-	str := fmt.Sprintf("env=%s branch=%s tags=%s", p.Environment, branch, p.ParsedTags())
+	str := fmt.Sprintf("env=%s branch=%s tags=%s", p.Environment, branch, p.Tags)
 
 	str = fmt.Sprintf("%s by %s", str, p.InitiatedBy)
 

@@ -15,6 +15,8 @@ import (
 	"github.com/plotly/plotbot/util"
 )
 
+var TEST_CONFIRM_TIMEOUT = time.Second
+
 func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Deployer {
 
 	execPath, err := os.Executable()
@@ -47,10 +49,11 @@ func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Dep
 	}
 
 	return &Deployer{
-		config:   &defaultdconf,
-		bot:      bot,
-		runner:   runner,
-		progress: make(chan string, 1000),
+		config:         &defaultdconf,
+		bot:            bot,
+		runner:         runner,
+		progress:       make(chan string, 1000),
+		confirmTimeout: TEST_CONFIRM_TIMEOUT,
 	}
 }
 
@@ -609,5 +612,117 @@ func TestFailedAnsible(t *testing.T) {
 	expected := "your deploy failed: exit status 99"
 	if !strings.Contains(actual, expected) {
 		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
+	}
+}
+
+func TestRunPlaybookConfirmationTimeout(t *testing.T) {
+	dep := defaultTestDep(time.Second * 0)
+	playbook := CONFIRM_PLAYBOOKS[0]
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot,
+			fmt.Sprintf("run %s on stage", playbook)))
+
+	time.Sleep(50 * time.Millisecond)
+
+	// attempt to confirm but a different user (should fail)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "yes", "rodoh"))
+
+	// check progress to make sure we don't receive any
+	progress, err := captureProgress(dep, TEST_CONFIRM_TIMEOUT+50*time.Millisecond)
+	if err == nil {
+		fmt.Println(strings.Join(progress, "; "))
+		t.Fatal("expected timeout error as we are expecting no progress")
+	}
+
+	runner := dep.runner.(*testutils.MockRunner)
+	if len(runner.Jobs) != 0 {
+		t.Fatalf("expected 0 job found %d", len(runner.Jobs))
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 2 {
+		t.Fatalf("expected 2 replies found %d", len(bot.TestReplies))
+	}
+
+	actual := bot.TestReplies[0].Text
+	expected := fmt.Sprintf("<@%s> This job requires confirmation. "+
+		"Confirm with '@%s: [yes|no]'",
+		testutils.DefaultFromUser, bot.Config.Nickname)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[1].Text
+	expected = fmt.Sprintf("<@%s> Did not receive confirmation in time. "+
+		"Cancelling job", testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("exected '%s' but found '%s'", expected, actual)
+	}
+}
+
+func TestRunPlaybookConfirmationSuccess(t *testing.T) {
+	dep := defaultTestDep(time.Second * 1)
+	playbook := CONFIRM_PLAYBOOKS[0]
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot,
+			fmt.Sprintf("run %s on stage", playbook)))
+
+	time.Sleep(50 * time.Millisecond)
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "yes I confirm"))
+
+	progress, err := captureProgress(dep, time.Second*2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectContain := util.Searchable{
+		"playbook_stage_postgres_recovery.yml",
+		"{{ansible-output}}",
+		"terminated successfully",
+	}
+
+	if !progress.ContainsAll(expectContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	expectNotToContain := util.Searchable{
+		"tags",
+	}
+
+	if progress.ContainsAny(expectNotToContain...) {
+		t.Errorf("expected progress %s not to contain any of %s", progress.String(),
+			expectContain.String())
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 3 {
+		t.Fatalf("expected 3 replies found %d", len(bot.TestReplies))
+	}
+
+	actual := bot.TestReplies[0].Text
+	expected := fmt.Sprintf("<@%s> This job requires confirmation. "+
+		"Confirm with '@%s: [yes|no]'",
+		testutils.DefaultFromUser, bot.Config.Nickname)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[1].Text
+	expected = fmt.Sprintf("<@%s> deploying, my friend", testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' but found '%s'", actual, expected)
+	}
+
+	actual = bot.TestReplies[2].Text
+	expected = fmt.Sprintf("<@%s> your deploy was successful",
+		testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' but found '%s'", actual, expected)
 	}
 }

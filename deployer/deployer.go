@@ -15,6 +15,7 @@ import (
 
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/internal"
+	"github.com/plotly/plotbot/util"
 )
 
 var helpText = `*Usage:* %s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
@@ -28,14 +29,16 @@ var helpText = `*Usage:* %s [please|insert reverence] deploy [<branch-name>] to 
 • %s cancel deploy - cancel the currently running deployment`
 
 type Deployer struct {
-	runner     Runnable
-	runningJob *DeployJob
-	bot        plotbot.BotLike
-	env        string
-	config     *DeployerConfig
-	progress   chan string
-	internal   *internal.InternalAPI
-	lockedBy   string
+	runner         Runnable
+	runningJob     *DeployJob
+	bot            plotbot.BotLike
+	confirmJob     *ConfirmJob
+	confirmTimeout time.Duration
+	env            string
+	config         *DeployerConfig
+	progress       chan string
+	internal       *internal.InternalAPI
+	lockedBy       string
 }
 
 type DeployerConfig struct {
@@ -71,6 +74,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	dep.config = &conf.Deployer
 	dep.env = os.Getenv("PLOTLY_ENV")
 	dep.runner = &Runner{}
+	dep.confirmTimeout = DEFAULT_CONFIRM_TIMEOUT
 
 	if dep.env == "" {
 		dep.env = "debug"
@@ -110,17 +114,45 @@ type DeployJob struct {
 	killing bool
 }
 
+var DEFAULT_CONFIRM_TIMEOUT = 4 * time.Second
+
+type ConfirmJob struct {
+	params *DeployParams
+	done   chan bool
+}
+
+var CONFIRM_PLAYBOOKS = util.Searchable{
+	"postgres_recovery", "postgres_failover"}
+
 var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
 
+var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
+
 func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
+
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
+		tags := strings.Replace(match[6], " ", "", -1)
+		if tags == "" {
+			tags = "updt_streambed"
+		}
 		return &DeployParams{
 			Environment:     match[3],
 			Branch:          match[2],
-			Tags:            match[6],
+			Tags:            tags,
 			InitiatedBy:     msg.FromUser.RealName,
 			From:            "chat",
 			initiatedByChat: msg,
+		}
+
+	} else if match := runFormat.FindStringSubmatch(msg.Text); match != nil {
+		return &DeployParams{
+			Playbook:        match[1],
+			Environment:     match[2],
+			Tags:            match[5],
+			InitiatedBy:     msg.FromUser.RealName,
+			From:            "chat",
+			initiatedByChat: msg,
+			Confirm:         CONFIRM_PLAYBOOKS.Includes(match[1]),
 		}
 	}
 
@@ -129,6 +161,8 @@ func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 
 func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
 	bot := conv.Bot
+	// msgp := *msg
+	// msg = &msgp
 
 	if params := dep.ExtractDeployParams(msg); params != nil {
 		if dep.lockedBy != "" {
@@ -139,6 +173,22 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		} else if dep.runningJob != nil {
 			dep.replyPersonnally(params,
 				fmt.Sprintf("Deploy currently running: %s", dep.runningJob.params))
+
+		} else if dep.confirmJob != nil {
+			m := fmt.Sprintf(
+				"waiting for confirmation from %s", dep.confirmJob.params.InitiatedBy,
+			)
+			dep.replyPersonnally(params, m)
+
+		} else if params.Confirm {
+			dep.confirmJob = &ConfirmJob{
+				params: params,
+				done:   make(chan bool, 2),
+			}
+			m := fmt.Sprintf("This job requires confirmation. "+
+				"Confirm with '%s [yes|no]'", dep.bot.AtMention())
+			dep.replyPersonnally(params, m)
+			go dep.manageConfirm()
 
 		} else {
 			go dep.handleDeploy(params)
@@ -187,6 +237,19 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		conv.Reply(msg, fmt.Sprintf(
 			helpText, mention, mention, mention, mention, mention, mention, mention,
 		))
+
+	} else if dep.confirmJob != nil {
+		waitingFor := dep.confirmJob.params.InitiatedBy
+		msgFrom := msg.FromUser.RealName
+
+		if waitingFor == msgFrom && msg.Contains("no") {
+			dep.replyPersonnally(dep.confirmJob.params, "ok cancelling...")
+			dep.confirmJob.done <- true
+
+		} else if waitingFor == msgFrom && msg.Contains("yes") {
+			go dep.handleDeploy(dep.confirmJob.params)
+			dep.confirmJob.done <- true
+		}
 	}
 }
 
@@ -199,12 +262,18 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	}
 
 	playbookFile := fmt.Sprintf("playbook_%s.yml", params.Environment)
-	if params.Environment == "stage" {
+	if params.Playbook != "" {
+		playbookFile = fmt.Sprintf(
+			"playbook_%s_%s.yml", params.Environment, params.Playbook,
+		)
+	} else if params.Environment == "stage" {
 		playbookFile = "playbook_gcpstage.yml"
 	}
 
-	tags := params.ParsedTags()
-	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile, "--tags", tags}
+	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile}
+	if params.Tags != "" {
+		cmdArgs = append(cmdArgs, "--tags", params.Tags)
+	}
 
 	branch := dep.config.DefaultBranch
 	if params.Branch != "" {
@@ -228,6 +297,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		pr := fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch)
 		cmdArgs = append(cmdArgs, "-e", pr)
 	}
+
 	if err := dep.pullRepo(branch); err != nil {
 		errorMsg := fmt.Sprintf("Unable to pull from repo: %s. Aborting.", err)
 		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
@@ -282,6 +352,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	if err := cmd.Wait(); err != nil {
 		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
 		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
+
 	} else {
 		dep.pubLine("[deployer] terminated successfully")
 		dep.replyPersonnally(params,
@@ -320,6 +391,19 @@ func (dep *Deployer) manageKillProcess(pty *os.File) {
 		if dep.runningJob != nil {
 			dep.runningJob.process.Kill()
 		}
+	}
+}
+
+func (dep *Deployer) manageConfirm() {
+	confirmJob := dep.confirmJob
+	select {
+	case <-confirmJob.done:
+		dep.confirmJob = nil
+	case <-time.After(dep.confirmTimeout):
+		m := fmt.Sprintf("Did not receive confirmation in time. "+
+			"Cancelling job %s", confirmJob.params)
+		dep.replyPersonnally(confirmJob.params, m)
+		dep.confirmJob = nil
 	}
 }
 
