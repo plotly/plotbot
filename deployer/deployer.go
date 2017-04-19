@@ -135,17 +135,14 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  "+
 				"Unlock with '%s, unlock deployment' if they're OK with it.",
 				dep.lockedBy, dep.bot.AtMention()))
-			return
-		}
-		if dep.runningJob != nil {
-			params := dep.runningJob.params
-			conv.Reply(msg, fmt.Sprintf("@%s Deploy currently running: %s",
-				msg.FromUser.Name, params))
-			return
+
+		} else if dep.runningJob != nil {
+			dep.replyPersonnally(params,
+				fmt.Sprintf("Deploy currently running: %s", dep.runningJob.params))
+
 		} else {
 			go dep.handleDeploy(params)
 		}
-		return
 
 	} else if msg.Contains("cancel deploy") {
 
@@ -155,14 +152,12 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			if dep.runningJob.killing == true {
 				conv.Reply(msg,
 					"deploy: Interrupt signal already sent, waiting to die")
-				return
 			} else {
 				conv.Reply(msg, "deploy: Sending Interrupt signal...")
 				dep.runningJob.killing = true
 				dep.runningJob.kill <- true
 			}
 		}
-		return
 	} else if msg.Contains("in the pipe") {
 		url := dep.getCompareUrl("prod", dep.config.DefaultBranch)
 		mention := msg.FromUser.Name
