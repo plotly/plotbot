@@ -615,7 +615,7 @@ func TestFailedAnsible(t *testing.T) {
 	}
 }
 
-func TestRunPlaybookConfirmationTimeout(t *testing.T) {
+func TestRunPlaybookConfirmationBlockingAndTimeout(t *testing.T) {
 	dep := defaultTestDep(time.Second * 0)
 	playbook := CONFIRM_PLAYBOOKS[0]
 
@@ -625,9 +625,16 @@ func TestRunPlaybookConfirmationTimeout(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
+	otherUser := "rodoh"
 	// attempt to confirm but a different user (should fail)
 	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
-		testutils.ToBotMsgFromUser(dep.bot, "yes", "rodoh"))
+		testutils.ToBotMsgFromUser(dep.bot, "yes", otherUser))
+
+	time.Sleep(50 * time.Millisecond)
+
+	// attempt to deploy. Should fail as we are waiting for confirmation
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", otherUser))
 
 	// check progress to make sure we don't receive any
 	progress, err := captureProgress(dep, TEST_CONFIRM_TIMEOUT+50*time.Millisecond)
@@ -642,8 +649,8 @@ func TestRunPlaybookConfirmationTimeout(t *testing.T) {
 	}
 
 	bot := dep.bot.(*testutils.MockBot)
-	if len(bot.TestReplies) != 2 {
-		t.Fatalf("expected 2 replies found %d", len(bot.TestReplies))
+	if len(bot.TestReplies) != 3 {
+		t.Fatalf("expected 3 replies found %d", len(bot.TestReplies))
 	}
 
 	actual := bot.TestReplies[0].Text
@@ -655,6 +662,13 @@ func TestRunPlaybookConfirmationTimeout(t *testing.T) {
 	}
 
 	actual = bot.TestReplies[1].Text
+	expected = fmt.Sprintf("<@%s> waiting for confirmation from %s",
+		otherUser, testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[2].Text
 	expected = fmt.Sprintf("<@%s> Did not receive confirmation in time. "+
 		"Cancelling job", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
