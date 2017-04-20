@@ -76,6 +76,19 @@ type DeployerConfig struct {
 	AllowedProdBranches []string `json:"allowed_prod_branches"`
 }
 
+type DeployJob struct {
+	process *os.Process
+	params  *DeployParams
+	quit    chan bool
+	kill    chan bool
+	killing bool
+}
+
+type ConfirmJob struct {
+	params *DeployParams
+	done   chan bool
+}
+
 type Runnable interface {
 	Run(string, ...string) *exec.Cmd
 }
@@ -121,40 +134,6 @@ func (dep *Deployer) loadInternalAPI() {
 	dep.internal = internal.New(dep.bot.LoadConfig)
 }
 
-/**
- * Examples:
- *   deploy to stage, branch boo, tags boom, reload-streambed
- *   deploy to stage the branch santa-claus with tags boom, reload-streambed
- *   deploy on prod, branch boo with tags: ahuh, mama, papa
- *   deploy to stage the branch master
- *   deploy prod branch boo  // shortest form
- * or second regexp:
- *   deploy branch boo to stage
- *   deploy santa-claus to stage with tags: kaboom
- */
-
-type DeployJob struct {
-	process *os.Process
-	params  *DeployParams
-	quit    chan bool
-	kill    chan bool
-	killing bool
-}
-
-var DEFAULT_CONFIRM_TIMEOUT = 4 * time.Second
-
-type ConfirmJob struct {
-	params *DeployParams
-	done   chan bool
-}
-
-var CONFIRM_PLAYBOOKS = util.Searchable{
-	"postgres_recovery", "postgres_failover"}
-
-var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
-
-var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
-
 func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
@@ -188,8 +167,6 @@ func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 
 func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
 	bot := conv.Bot
-	// msgp := *msg
-	// msg = &msgp
 
 	if params := dep.ExtractDeployParams(msg); params != nil {
 		if dep.lockedBy != "" {
