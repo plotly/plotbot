@@ -151,7 +151,7 @@ func TestCancelDeployNotRunning(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := "No deploy running, sorry friend.."
 	if actual != expected {
-		t.Errorf("exected '%s' but found '%s'", expected, actual)
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
 	}
 }
 
@@ -198,13 +198,13 @@ func TestStageDeploy(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := fmt.Sprintf("<@%s> deploying", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	actual = bot.TestReplies[1].Text
 	expected = fmt.Sprintf("<@%s> your deploy was successful", testutils.DefaultFromUser)
 	if actual != expected {
-		t.Errorf("exected '%s' but found '%s'", expected, actual)
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
 	}
 }
 
@@ -237,13 +237,13 @@ func TestProdDeployWithTags(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := fmt.Sprintf("<@%s> deploying", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	actual = bot.TestReplies[1].Text
 	expected = fmt.Sprintf("<@%s> your deploy was successful", testutils.DefaultFromUser)
 	if actual != expected {
-		t.Errorf("exected '%s' but found '%s'", expected, actual)
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
 	}
 }
 
@@ -274,7 +274,7 @@ func TestLockUnlock(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := "Deployment is now locked"
 	if !strings.Contains(actual, expected) {
-		t.Fatalf("exected '%s' to contain '%s'", expected, actual)
+		t.Fatalf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	// Then make sure a deploy fails while locked
@@ -298,7 +298,7 @@ func TestLockUnlock(t *testing.T) {
 	actual = bot.TestReplies[0].Text
 	expected = fmt.Sprintf("Deployment was locked by %s", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Fatalf("exected '%s' to contain '%s'", expected, actual)
+		t.Fatalf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	// Unlock deployment
@@ -322,7 +322,7 @@ func TestLockUnlock(t *testing.T) {
 	actual = bot.TestReplies[0].Text
 	expected = "Deployment is now unlocked"
 	if !strings.Contains(actual, expected) {
-		t.Fatalf("exected '%s' to contain '%s'", expected, actual)
+		t.Fatalf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	// Finally make sure we can now deploy
@@ -388,14 +388,14 @@ func TestCancelDeploy(t *testing.T) {
 	actual := bot.TestReplies[1].Text
 	expected := "deploy: Sending Interrupt signal"
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", actual, expected)
+		t.Errorf("expected '%s' to contain '%s'", actual, expected)
 	}
 
 	actual = bot.TestReplies[2].Text
 	expected = fmt.Sprintf("<@%s> your deploy failed: signal: interrupt",
 		testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", actual, expected)
+		t.Errorf("expected '%s' to contain '%s'", actual, expected)
 	}
 }
 
@@ -658,21 +658,21 @@ func TestRunPlaybookConfirmationBlockingAndTimeout(t *testing.T) {
 		"Confirm with '@%s: [yes|no]'",
 		testutils.DefaultFromUser, bot.Config.Nickname)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	actual = bot.TestReplies[1].Text
 	expected = fmt.Sprintf("<@%s> waiting for confirmation from %s",
 		otherUser, testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	actual = bot.TestReplies[2].Text
 	expected = fmt.Sprintf("<@%s> Did not receive confirmation in time. "+
 		"Cancelling job", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' but found '%s'", expected, actual)
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
 	}
 }
 
