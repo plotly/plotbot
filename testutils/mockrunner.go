@@ -4,23 +4,25 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/plotly/plotbot/util"
 )
 
 type MockRunner struct {
-	Jobs        []Searchable
+	Jobs        []util.Searchable
 	ParseVars   func(string, ...string) []string
 	TestCmdName string
 }
 
 func ClearMockRunner(r *MockRunner) {
-	r.Jobs = []Searchable{}
+	r.Jobs = []util.Searchable{}
 }
 
 // see https://npf.io/2015/06/testing-exec-command/
 func (r *MockRunner) Run(c string, s ...string) *exec.Cmd {
 
 	allc := append([]string{c}, s...)
-	r.Jobs = append(r.Jobs, Searchable(allc))
+	r.Jobs = append(r.Jobs, util.Searchable(allc))
 
 	testcmd := r.TestCmdName
 	if testcmd == "" {

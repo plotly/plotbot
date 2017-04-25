@@ -2,27 +2,21 @@ package deployer
 
 import (
 	"fmt"
-	"strings"
+	"io/ioutil"
+	"regexp"
 
 	"github.com/plotly/plotbot"
 )
 
 type DeployParams struct {
+	Playbook        string
 	Environment     string
 	Branch          string
 	Tags            string
 	InitiatedBy     string
 	From            string
 	initiatedByChat *plotbot.Message
-}
-
-// ParsedTags returns *default* or user-specified tags
-func (p *DeployParams) ParsedTags() string {
-	tags := strings.Replace(p.Tags, " ", "", -1)
-	if tags == "" {
-		tags = "updt_streambed"
-	}
-	return tags
+	Confirm         bool
 }
 
 func (p *DeployParams) String() string {
@@ -31,9 +25,26 @@ func (p *DeployParams) String() string {
 		branch = "[default]"
 	}
 
-	str := fmt.Sprintf("env=%s branch=%s tags=%s", p.Environment, branch, p.ParsedTags())
+	str := fmt.Sprintf("env=%s branch=%s tags=%s", p.Environment, branch, p.Tags)
 
 	str = fmt.Sprintf("%s by %s", str, p.InitiatedBy)
 
 	return str
+}
+
+var playbookRegex = regexp.MustCompile(`^playbook_(stage|prod)_(.*).yml$`)
+
+func listAllowedPlaybooks(path string) ([]string, error) {
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+	playbooks := []string{}
+	for _, file := range files {
+		if match := playbookRegex.FindStringSubmatch(file.Name()); match != nil {
+			playbooks = append(playbooks, match[2])
+		}
+	}
+
+	return playbooks, nil
 }

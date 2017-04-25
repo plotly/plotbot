@@ -15,17 +15,57 @@ import (
 
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/internal"
+	"github.com/plotly/plotbot/util"
 )
 
+func deployHelp(botName string) string {
+	t := `*Usage:* %[1]s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
+*Examples:*
+• %[1]s please deploy to prod
+• %[1]s deploy thing-to-test to stage
+• %[1]s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
+*Other commands:*
+• %[1]s what's in the pipe? - show what's waiting to be deployed to prod
+• %[1]s lock deployment - prevent deployment until it's unlocked
+• %[1]s cancel deploy - cancel the currently running deployment
+• %[1]s run help - show help on running specific playbooks in an environment`
+	return fmt.Sprintf(t, botName)
+}
+
+func runHelp(botName, repoPath string) string {
+	t := `*Usage:* %[1]s [please|insert reverence] run [<playbook suffix>] in <environment> [, tags: <ansible-playbook tags>, ..., ...]
+*Examples:*
+• %[1]s run postgres_failover on prod
+• %[1]s run postgres_recovery on stage with tags: everything_is_broken`
+
+	playbooks, err := listAllowedPlaybooks(repoPath)
+	if err == nil && len(playbooks) > 0 {
+		t = t + fmt.Sprintf("\n*Available commands:*\n• %s",
+			strings.Join(playbooks, "\n• "))
+	}
+
+	return fmt.Sprintf(t, botName)
+}
+
+var DEFAULT_CONFIRM_TIMEOUT = 30 * time.Second
+var CONFIRM_PLAYBOOKS = util.Searchable{
+	"postgres_recovery", "postgres_failover"}
+
+var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
+
+var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
+
 type Deployer struct {
-	runner     Runnable
-	runningJob *DeployJob
-	bot        plotbot.BotLike
-	env        string
-	config     *DeployerConfig
-	progress   chan string
-	internal   *internal.InternalAPI
-	lockedBy   string
+	runner         Runnable
+	runningJob     *DeployJob
+	bot            plotbot.BotLike
+	confirmJob     *ConfirmJob
+	confirmTimeout time.Duration
+	env            string
+	config         *DeployerConfig
+	progress       chan string
+	internal       *internal.InternalAPI
+	lockedBy       string
 }
 
 type DeployerConfig struct {
@@ -34,6 +74,19 @@ type DeployerConfig struct {
 	ProgressRoom        string   `json:"progress_room"`
 	DefaultBranch       string   `json:"default_branch"`
 	AllowedProdBranches []string `json:"allowed_prod_branches"`
+}
+
+type DeployJob struct {
+	process *os.Process
+	params  *DeployParams
+	quit    chan bool
+	kill    chan bool
+	killing bool
+}
+
+type ConfirmJob struct {
+	params *DeployParams
+	done   chan bool
 }
 
 type Runnable interface {
@@ -61,6 +114,7 @@ func (dep *Deployer) InitPlugin(bot *plotbot.Bot) {
 	dep.config = &conf.Deployer
 	dep.env = os.Getenv("PLOTLY_ENV")
 	dep.runner = &Runner{}
+	dep.confirmTimeout = DEFAULT_CONFIRM_TIMEOUT
 
 	if dep.env == "" {
 		dep.env = "debug"
@@ -80,52 +134,69 @@ func (dep *Deployer) loadInternalAPI() {
 	dep.internal = internal.New(dep.bot.LoadConfig)
 }
 
-/**
- * Examples:
- *   deploy to stage, branch boo, tags boom, reload-streambed
- *   deploy to stage the branch santa-claus with tags boom, reload-streambed
- *   deploy on prod, branch boo with tags: ahuh, mama, papa
- *   deploy to stage the branch master
- *   deploy prod branch boo  // shortest form
- * or second regexp:
- *   deploy branch boo to stage
- *   deploy santa-claus to stage with tags: kaboom
- */
+func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 
-type DeployJob struct {
-	process *os.Process
-	params  *DeployParams
-	quit    chan bool
-	kill    chan bool
-	killing bool
+	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
+		tags := strings.Replace(match[6], " ", "", -1)
+		if tags == "" {
+			tags = "updt_streambed"
+		}
+		return &DeployParams{
+			Environment:     match[3],
+			Branch:          match[2],
+			Tags:            tags,
+			InitiatedBy:     msg.FromUser.RealName,
+			From:            "chat",
+			initiatedByChat: msg,
+		}
+
+	} else if match := runFormat.FindStringSubmatch(msg.Text); match != nil {
+		return &DeployParams{
+			Playbook:        match[1],
+			Environment:     match[2],
+			Tags:            match[5],
+			InitiatedBy:     msg.FromUser.RealName,
+			From:            "chat",
+			initiatedByChat: msg,
+			Confirm:         CONFIRM_PLAYBOOKS.Includes(match[1]),
+		}
+	}
+
+	return nil
 }
-
-var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
 
 func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Message) {
 	bot := conv.Bot
 
-	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
+	if params := dep.ExtractDeployParams(msg); params != nil {
 		if dep.lockedBy != "" {
-			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  Unlock with '%s, unlock deployment' if they're OK with it.", dep.lockedBy, dep.bot.AtMention()))
-			return
-		}
-		if dep.runningJob != nil {
-			params := dep.runningJob.params
-			conv.Reply(msg, fmt.Sprintf("@%s Deploy currently running: %s", msg.FromUser.Name, params))
-			return
-		} else {
-			params := &DeployParams{
-				Environment:     match[3],
-				Branch:          match[2],
-				Tags:            match[6],
-				InitiatedBy:     msg.FromUser.RealName,
-				From:            "chat",
-				initiatedByChat: msg,
+			conv.Reply(msg, fmt.Sprintf("Deployment was locked by %s.  "+
+				"Unlock with '%s, unlock deployment' if they're OK with it.",
+				dep.lockedBy, dep.bot.AtMention()))
+
+		} else if dep.runningJob != nil {
+			dep.replyPersonnally(params,
+				fmt.Sprintf("Deploy currently running: %s", dep.runningJob.params))
+
+		} else if dep.confirmJob != nil {
+			m := fmt.Sprintf(
+				"waiting for confirmation from %s", dep.confirmJob.params.InitiatedBy,
+			)
+			dep.replyPersonnally(params, m)
+
+		} else if params.Confirm {
+			dep.confirmJob = &ConfirmJob{
+				params: params,
+				done:   make(chan bool, 2),
 			}
+			m := fmt.Sprintf("This job requires confirmation. "+
+				"Confirm with '%s [yes|no]'", dep.bot.AtMention())
+			dep.replyPersonnally(params, m)
+			go dep.manageConfirm()
+
+		} else {
 			go dep.handleDeploy(params)
 		}
-		return
 
 	} else if msg.Contains("cancel deploy") {
 
@@ -133,42 +204,56 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			conv.Reply(msg, "No deploy running, sorry friend..")
 		} else {
 			if dep.runningJob.killing == true {
-				conv.Reply(msg, "deploy: Interrupt signal already sent, waiting to die")
-				return
+				conv.Reply(msg,
+					"deploy: Interrupt signal already sent, waiting to die")
 			} else {
 				conv.Reply(msg, "deploy: Sending Interrupt signal...")
 				dep.runningJob.killing = true
 				dep.runningJob.kill <- true
 			}
 		}
-		return
 	} else if msg.Contains("in the pipe") {
 		url := dep.getCompareUrl("prod", dep.config.DefaultBranch)
 		mention := msg.FromUser.Name
 		if url != "" {
-			conv.Reply(msg, fmt.Sprintf("@%s in %s branch, waiting to reach prod: %s", mention, dep.config.DefaultBranch, url))
+			conv.Reply(msg,
+				fmt.Sprintf("@%s in %s branch, waiting to reach prod: %s",
+					mention, dep.config.DefaultBranch, url))
 		} else {
-			conv.Reply(msg, fmt.Sprintf("@%s couldn't get current revision on prod", mention))
+			conv.Reply(msg,
+				fmt.Sprintf("@%s couldn't get current revision on prod", mention))
 		}
 	} else if msg.Contains("unlock deploy") {
 		dep.lockedBy = ""
 		conv.Reply(msg, fmt.Sprintf("Deployment is now unlocked."))
-		bot.Notify(dep.config.AnnounceRoom, "#00ff00", fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name))
+		bot.Notify(dep.config.AnnounceRoom, "#00ff00",
+			fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name))
+
 	} else if msg.Contains("lock deploy") {
 		dep.lockedBy = msg.FromUser.Name
-		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  Unlock with '%s, unlock deployment' ASAP!", dep.bot.AtMention()))
-		bot.Notify(dep.config.AnnounceRoom, "#ff0000", fmt.Sprintf("%s has locked deployment", dep.lockedBy))
+		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  "+
+			"Unlock with '%s, unlock deployment' ASAP!", dep.bot.AtMention()))
+		bot.Notify(dep.config.AnnounceRoom, "#ff0000",
+			fmt.Sprintf("%s has locked deployment", dep.lockedBy))
+
 	} else if msg.Contains("deploy") || msg.Contains("push to") {
-		mention := dep.bot.AtMention()
-		conv.Reply(msg, fmt.Sprintf(`*Usage:* %s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
-*Examples:*
-• %s please deploy to prod
-• %s deploy thing-to-test to stage
-• %s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
-*Other commands:*
-• %s what's in the pipe? - show what's waiting to be deployed to prod
-• %s lock deployment - prevent deployment until it's unlocked
-• %s cancel deploy - cancel the currently running deployment`, mention, mention, mention, mention, mention, mention, mention))
+		conv.Reply(msg, deployHelp(dep.bot.AtMention()))
+
+	} else if msg.Contains("run") && msg.ContainsAny([]string{"how", "help"}) {
+		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.RepositoryPath))
+
+	} else if dep.confirmJob != nil {
+		waitingFor := dep.confirmJob.params.InitiatedBy
+		msgFrom := msg.FromUser.RealName
+
+		if waitingFor == msgFrom && msg.Contains("no") {
+			dep.replyPersonnally(dep.confirmJob.params, "ok cancelling...")
+			dep.confirmJob.done <- true
+
+		} else if waitingFor == msgFrom && msg.Contains("yes") {
+			go dep.handleDeploy(dep.confirmJob.params)
+			dep.confirmJob.done <- true
+		}
 	}
 }
 
@@ -181,12 +266,18 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	}
 
 	playbookFile := fmt.Sprintf("playbook_%s.yml", params.Environment)
-	if params.Environment == "stage" {
+	if params.Playbook != "" {
+		playbookFile = fmt.Sprintf(
+			"playbook_%s_%s.yml", params.Environment, params.Playbook,
+		)
+	} else if params.Environment == "stage" {
 		playbookFile = "playbook_gcpstage.yml"
 	}
 
-	tags := params.ParsedTags()
-	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile, "--tags", tags}
+	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile}
+	if params.Tags != "" {
+		cmdArgs = append(cmdArgs, "--tags", params.Tags)
+	}
 
 	branch := dep.config.DefaultBranch
 	if params.Branch != "" {
@@ -199,39 +290,46 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 				}
 			}
 			if !ok {
-				errorMsg := fmt.Sprintf("%s is not a legal branch for prod.  Aborting.", params.Branch)
+				errorMsg := fmt.Sprintf(
+					"%s is not a legal branch for prod.  Aborting.", params.Branch)
 				dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
 				dep.replyPersonnally(params, errorMsg)
 				return
 			}
 		}
 		branch = params.Branch
-		cmdArgs = append(cmdArgs, "-e", fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch))
+		pr := fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch)
+		cmdArgs = append(cmdArgs, "-e", pr)
 	}
+
 	if err := dep.pullRepo(branch); err != nil {
 		errorMsg := fmt.Sprintf("Unable to pull from repo: %s. Aborting.", err)
 		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
 		dep.replyPersonnally(params, errorMsg)
 		return
 	} else {
-		dep.pubLine(fmt.Sprintf("[deployer] Using latest revision of %s branch", branch))
+		lr := fmt.Sprintf("[deployer] Using latest revision of %s branch", branch)
+		dep.pubLine(lr)
 	}
-	//
-	// Launching deploy
-	//
 
 	bot := dep.bot
-	bot.Notify(dep.config.AnnounceRoom, "#447bdc", fmt.Sprintf("[deployer] Launching: %s, monitor in %s", params, dep.config.ProgressRoom))
-	dep.replyPersonnally(params, bot.WithMood("deploying, my friend", "deploying, yyaaahhhOooOOO!"))
+	bot.Notify(dep.config.AnnounceRoom, "#447bdc",
+		fmt.Sprintf("[deployer] Launching: %s, monitor in %s",
+			params, dep.config.ProgressRoom))
+	dep.replyPersonnally(params, bot.WithMood(
+		"deploying, my friend", "deploying, yyaaahhhOooOOO!"))
 
 	if params.Environment == "prod" {
 		url := dep.getCompareUrl(params.Environment, params.Branch)
 		if url != "" {
-			dep.pubLine(fmt.Sprintf("[deployer] Compare what is being pushed: %s", url))
+			dep.pubLine(
+				fmt.Sprintf("[deployer] Compare what is being pushed: %s", url))
 		}
 	}
 
-	dep.pubLine(fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
+	dep.pubLine(
+		fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
+
 	cmd := dep.runner.Run(cmdArgs[0], cmdArgs[1:]...)
 	cmd.Dir = dep.config.RepositoryPath
 	env := append(os.Environ(), "ANSIBLE_NOCOLOR=1")
@@ -244,6 +342,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	dep.runningJob = &DeployJob{
 		process: cmd.Process,
 		params:  params,
@@ -253,13 +352,18 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 
 	go dep.manageDeployIo(pty)
 	go dep.manageKillProcess(pty)
+
 	if err := cmd.Wait(); err != nil {
 		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
 		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
+
 	} else {
 		dep.pubLine("[deployer] terminated successfully")
-		dep.replyPersonnally(params, bot.WithMood("your deploy was successful", "your deploy was GREAT, you're great !"))
+		dep.replyPersonnally(params,
+			bot.WithMood("your deploy was successful",
+				"your deploy was GREAT, you're great !"))
 	}
+
 	dep.runningJob.quit <- true
 	dep.runningJob = nil
 }
@@ -291,6 +395,19 @@ func (dep *Deployer) manageKillProcess(pty *os.File) {
 		if dep.runningJob != nil {
 			dep.runningJob.process.Kill()
 		}
+	}
+}
+
+func (dep *Deployer) manageConfirm() {
+	confirmJob := dep.confirmJob
+	select {
+	case <-confirmJob.done:
+		dep.confirmJob = nil
+	case <-time.After(dep.confirmTimeout):
+		m := fmt.Sprintf("Did not receive confirmation in time. "+
+			"Cancelling job %s", confirmJob.params)
+		dep.replyPersonnally(confirmJob.params, m)
+		dep.confirmJob = nil
 	}
 }
 
@@ -341,6 +458,7 @@ func (dep *Deployer) getCompareUrl(env, branch string) string {
 		return ""
 	}
 
-	url := fmt.Sprintf("https://github.com/plotly/streambed/compare/%s...%s", currentHead, branch)
+	url := fmt.Sprintf("https://github.com/plotly/streambed/compare/%s...%s",
+		currentHead, branch)
 	return url
 }

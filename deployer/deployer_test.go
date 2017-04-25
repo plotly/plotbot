@@ -12,7 +12,10 @@ import (
 
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/testutils"
+	"github.com/plotly/plotbot/util"
 )
+
+var TEST_CONFIRM_TIMEOUT = time.Second
 
 func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Deployer {
 
@@ -46,10 +49,11 @@ func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Dep
 	}
 
 	return &Deployer{
-		config:   &defaultdconf,
-		bot:      bot,
-		runner:   runner,
-		progress: make(chan string, 1000),
+		config:         &defaultdconf,
+		bot:            bot,
+		runner:         runner,
+		progress:       make(chan string, 1000),
+		confirmTimeout: TEST_CONFIRM_TIMEOUT,
 	}
 }
 
@@ -72,11 +76,11 @@ func defaultTestDep(cmdDelay time.Duration) *Deployer {
 		})
 }
 
-func captureProgress(dep *Deployer, waitTime time.Duration) (testutils.Searchable, error) {
+func captureProgress(dep *Deployer, waitTime time.Duration) (util.Searchable, error) {
 
 	timer := time.NewTimer(waitTime)
 	done := make(chan bool, 2)
-	progress := testutils.Searchable{}
+	progress := util.Searchable{}
 	for {
 		select {
 		case <-timer.C:
@@ -136,13 +140,8 @@ func TestCmdProcess(t *testing.T) {
 
 func TestCancelDeployNotRunning(t *testing.T) {
 	dep := defaultTestDep(time.Second)
-
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "cancel deploy")
-
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "cancel deploy"))
 
 	bot := dep.bot.(*testutils.MockBot)
 	if len(bot.TestReplies) != 1 {
@@ -152,25 +151,21 @@ func TestCancelDeployNotRunning(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := "No deploy running, sorry friend.."
 	if actual != expected {
-		t.Errorf("exected '%s' but found '%s'", expected, actual)
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
 	}
 }
 
 func TestStageDeploy(t *testing.T) {
 	dep := defaultTestDep(time.Second)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to stage"))
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
-
-	dep.ChatHandler(&conv, &msg)
 	progress, err := captureProgress(dep, time.Second*2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectContain := testutils.Searchable{
+	expectContain := util.Searchable{
 		"ansible-playbook -i tools/",
 		"--tags updt_streambed",
 		"{{ansible-output}}",
@@ -203,31 +198,27 @@ func TestStageDeploy(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := fmt.Sprintf("<@%s> deploying", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	actual = bot.TestReplies[1].Text
 	expected = fmt.Sprintf("<@%s> your deploy was successful", testutils.DefaultFromUser)
 	if actual != expected {
-		t.Errorf("exected '%s' but found '%s'", expected, actual)
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
 	}
 }
 
 func TestProdDeployWithTags(t *testing.T) {
 	dep := defaultTestDep(time.Second)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod with tags: umwelt"))
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod with tags: umwelt")
-
-	dep.ChatHandler(&conv, &msg)
 	progress, err := captureProgress(dep, time.Second*2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectContain := testutils.Searchable{"ansible-playbook -i tools/",
+	expectContain := util.Searchable{"ansible-playbook -i tools/",
 		"--tags umwelt",
 		"{{ansible-output}}",
 		"terminated successfully",
@@ -246,13 +237,13 @@ func TestProdDeployWithTags(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := fmt.Sprintf("<@%s> deploying", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	actual = bot.TestReplies[1].Text
 	expected = fmt.Sprintf("<@%s> your deploy was successful", testutils.DefaultFromUser)
 	if actual != expected {
-		t.Errorf("exected '%s' but found '%s'", expected, actual)
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
 	}
 }
 
@@ -261,13 +252,8 @@ func TestLockUnlock(t *testing.T) {
 	// First test locking - set command delay to 0 so we can wait for progress
 	// on a shorter interval.
 	dep := defaultTestDep(time.Second * 0)
-
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
-	msg := testutils.ToBotMsg(dep.bot, "please lock deployment")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "please lock deployment"))
 
 	// there should be no progress
 	_, err := captureProgress(dep, time.Millisecond*500)
@@ -288,17 +274,13 @@ func TestLockUnlock(t *testing.T) {
 	actual := bot.TestReplies[0].Text
 	expected := "Deployment is now locked"
 	if !strings.Contains(actual, expected) {
-		t.Fatalf("exected '%s' to contain '%s'", expected, actual)
+		t.Fatalf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	// Then make sure a deploy fails while locked
 	clearMocks(dep)
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
-	msg = testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", "rodoh")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", "rodoh"))
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err == nil {
@@ -316,17 +298,13 @@ func TestLockUnlock(t *testing.T) {
 	actual = bot.TestReplies[0].Text
 	expected = fmt.Sprintf("Deployment was locked by %s", testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Fatalf("exected '%s' to contain '%s'", expected, actual)
+		t.Fatalf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	// Unlock deployment
 	clearMocks(dep)
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
-	msg = testutils.ToBotMsg(dep.bot, "unlock deployment")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "unlock deployment"))
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err == nil {
@@ -344,16 +322,12 @@ func TestLockUnlock(t *testing.T) {
 	actual = bot.TestReplies[0].Text
 	expected = "Deployment is now unlocked"
 	if !strings.Contains(actual, expected) {
-		t.Fatalf("exected '%s' to contain '%s'", expected, actual)
+		t.Fatalf("expected '%s' to contain '%s'", expected, actual)
 	}
 
 	// Finally make sure we can now deploy
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg = testutils.ToBotMsg(dep.bot, "deploy to prod")
-
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod"))
 	captureProgress(dep, time.Millisecond*500)
 
 	if len(runner.Jobs) != 3 {
@@ -366,27 +340,21 @@ func TestCancelDeploy(t *testing.T) {
 	// set up for long running deploy
 	dep := defaultTestDep(time.Second * 5)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to stage"))
 
 	time.Sleep(time.Millisecond * 500)
 
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
 	fromUser := "rodoh"
-	msg = testutils.ToBotMsgFromUser(dep.bot, "cancel deploy", fromUser)
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "cancel deploy", fromUser))
 
 	progress, err := captureProgress(dep, time.Second*4)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectContain := testutils.Searchable{
+	expectContain := util.Searchable{
 		"ansible-playbook",
 		"--tags updt_streambed",
 		"terminated with error: signal: interrupt",
@@ -396,12 +364,12 @@ func TestCancelDeploy(t *testing.T) {
 			expectContain.String())
 	}
 
-	expectNotToContain := testutils.Searchable{
+	expectNotToContain := util.Searchable{
 		"terminated successfully",
 		"{{ansible-output}}",
 	}
 	if progress.ContainsAny(expectNotToContain...) {
-		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+		t.Errorf("expected progress %s not to contain any of %s", progress.String(),
 			expectContain.String())
 	}
 
@@ -420,34 +388,28 @@ func TestCancelDeploy(t *testing.T) {
 	actual := bot.TestReplies[1].Text
 	expected := "deploy: Sending Interrupt signal"
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", actual, expected)
 	}
 
 	actual = bot.TestReplies[2].Text
-	expected = fmt.Sprintf("<@%s> your deploy failed: signal: interrupt", fromUser)
+	expected = fmt.Sprintf("<@%s> your deploy failed: signal: interrupt",
+		testutils.DefaultFromUser)
 	if !strings.Contains(actual, expected) {
-		t.Errorf("exected '%s' to contain '%s'", expected, actual)
+		t.Errorf("expected '%s' to contain '%s'", actual, expected)
 	}
 }
 
 func TestJobAlreadyRunning(t *testing.T) {
 	dep := defaultTestDep(time.Second)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to stage")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to stage"))
 
 	time.Sleep(time.Millisecond * 200)
 
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-
 	fromUser := "rodoh"
-	msg = testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", fromUser)
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", fromUser))
 
 	_, err := captureProgress(dep, time.Second*2)
 	if err != nil {
@@ -476,11 +438,8 @@ func TestJobAlreadyRunning(t *testing.T) {
 func TestHelp(t *testing.T) {
 	dep := defaultTestDep(time.Second)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy whats up?")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy whats up?"))
 
 	bot := dep.bot.(*testutils.MockBot)
 	replies := bot.TestReplies
@@ -501,11 +460,8 @@ func TestHelp(t *testing.T) {
 func TestAllowedProdBranches(t *testing.T) {
 	dep := defaultTestDep(time.Second * 0)
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy cats to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy cats to prod"))
 
 	_, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -526,11 +482,8 @@ func TestAllowedProdBranches(t *testing.T) {
 	}
 
 	clearMocks(dep)
-	conv = plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg = testutils.ToBotMsg(dep.bot, "deploy master to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy master to prod"))
 
 	_, err = captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -557,7 +510,7 @@ func TestFailedGitFetch(t *testing.T) {
 		testutils.NewDefaultMockBot(),
 		&testutils.MockRunner{
 			ParseVars: func(c string, s ...string) []string {
-				args := testutils.Searchable(s)
+				args := util.Searchable(s)
 				if c == "git" && args.Contains("fetch") {
 					return []string{"GO_CMD_PROCESS_EXIT=99"}
 				}
@@ -565,11 +518,8 @@ func TestFailedGitFetch(t *testing.T) {
 			},
 		})
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod"))
 
 	_, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -596,7 +546,7 @@ func TestFailedGitCheckout(t *testing.T) {
 		testutils.NewDefaultMockBot(),
 		&testutils.MockRunner{
 			ParseVars: func(c string, s ...string) []string {
-				args := testutils.Searchable(s)
+				args := util.Searchable(s)
 				if c == "git" && args.Contains("checkout") {
 					return []string{"GO_CMD_PROCESS_EXIT=99"}
 				}
@@ -604,11 +554,8 @@ func TestFailedGitCheckout(t *testing.T) {
 			},
 		})
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod"))
 
 	_, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -642,11 +589,8 @@ func TestFailedAnsible(t *testing.T) {
 			},
 		})
 
-	conv := plotbot.Conversation{
-		Bot: dep.bot,
-	}
-	msg := testutils.ToBotMsg(dep.bot, "deploy to prod with tags: onions")
-	dep.ChatHandler(&conv, &msg)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to prod with tags: onions"))
 
 	progress, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
@@ -668,5 +612,156 @@ func TestFailedAnsible(t *testing.T) {
 	expected := "your deploy failed: exit status 99"
 	if !strings.Contains(actual, expected) {
 		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
+	}
+}
+
+func TestRunPlaybookConfirmationBlockingAndTimeout(t *testing.T) {
+	dep := defaultTestDep(time.Second * 0)
+	playbook := CONFIRM_PLAYBOOKS[0]
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot,
+			fmt.Sprintf("run %s on stage", playbook)))
+
+	time.Sleep(50 * time.Millisecond)
+
+	otherUser := "rodoh"
+	// attempt to confirm but a different user (should fail)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "yes", otherUser))
+
+	time.Sleep(50 * time.Millisecond)
+
+	// attempt to deploy. Should fail as we are waiting for confirmation
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsgFromUser(dep.bot, "deploy to prod", otherUser))
+
+	// check progress to make sure we don't receive any
+	progress, err := captureProgress(dep, TEST_CONFIRM_TIMEOUT+50*time.Millisecond)
+	if err == nil {
+		fmt.Println(strings.Join(progress, "; "))
+		t.Fatal("expected timeout error as we are expecting no progress")
+	}
+
+	runner := dep.runner.(*testutils.MockRunner)
+	if len(runner.Jobs) != 0 {
+		t.Fatalf("expected 0 job found %d", len(runner.Jobs))
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 3 {
+		t.Fatalf("expected 3 replies found %d", len(bot.TestReplies))
+	}
+
+	actual := bot.TestReplies[0].Text
+	expected := fmt.Sprintf("<@%s> This job requires confirmation. "+
+		"Confirm with '@%s: [yes|no]'",
+		testutils.DefaultFromUser, bot.Config.Nickname)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[1].Text
+	expected = fmt.Sprintf("<@%s> waiting for confirmation from %s",
+		otherUser, testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[2].Text
+	expected = fmt.Sprintf("<@%s> Did not receive confirmation in time. "+
+		"Cancelling job", testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' but found '%s'", expected, actual)
+	}
+}
+
+func TestRunPlaybookConfirmationSuccess(t *testing.T) {
+	dep := defaultTestDep(time.Second * 1)
+	playbook := CONFIRM_PLAYBOOKS[0]
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot,
+			fmt.Sprintf("run %s on stage", playbook)))
+
+	time.Sleep(50 * time.Millisecond)
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "yes I confirm"))
+
+	progress, err := captureProgress(dep, time.Second*2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectContain := util.Searchable{
+		"playbook_stage_postgres_recovery.yml",
+		"{{ansible-output}}",
+		"terminated successfully",
+	}
+
+	if !progress.ContainsAll(expectContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	expectNotToContain := util.Searchable{
+		"tags",
+	}
+
+	if progress.ContainsAny(expectNotToContain...) {
+		t.Errorf("expected progress %s not to contain any of %s", progress.String(),
+			expectContain.String())
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 3 {
+		t.Fatalf("expected 3 replies found %d", len(bot.TestReplies))
+	}
+
+	actual := bot.TestReplies[0].Text
+	expected := fmt.Sprintf("<@%s> This job requires confirmation. "+
+		"Confirm with '@%s: [yes|no]'",
+		testutils.DefaultFromUser, bot.Config.Nickname)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' to contain '%s'", expected, actual)
+	}
+
+	actual = bot.TestReplies[1].Text
+	expected = fmt.Sprintf("<@%s> deploying, my friend", testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' but found '%s'", actual, expected)
+	}
+
+	actual = bot.TestReplies[2].Text
+	expected = fmt.Sprintf("<@%s> your deploy was successful",
+		testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' but found '%s'", actual, expected)
+	}
+}
+
+func TestRunHelp(t *testing.T) {
+	dep := defaultTestDep(time.Second)
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "run help"))
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 replies got %d", len(replies))
+	}
+
+	actual := replies[0].Text
+	if !strings.Contains(strings.ToLower(actual), "usage") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "usage")
+	}
+	if !strings.Contains(strings.ToLower(actual), "examples") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "examples")
+	}
+	if !strings.Contains(strings.ToLower(actual), "postgres_failover") {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, "examples")
 	}
 }
