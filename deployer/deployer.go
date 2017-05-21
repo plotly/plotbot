@@ -270,8 +270,9 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		playbookFile = fmt.Sprintf(
 			"playbook_%s_%s.yml", params.Environment, params.Playbook,
 		)
-	} else if params.Environment == "stage" {
-		playbookFile = "playbook_gcpstage.yml"
+
+	} else if params.Environment == "stage" || params.Environment == "prod" {
+		playbookFile = fmt.Sprintf("playbook_gcp%s.yml", params.Environment)
 	}
 
 	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile}
