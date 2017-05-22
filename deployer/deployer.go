@@ -40,8 +40,13 @@ func runHelp(botName, repoPath string) string {
 
 	playbooks, err := listAllowedPlaybooks(repoPath)
 	if err == nil && len(playbooks) > 0 {
-		t = t + fmt.Sprintf("\n*Available commands:*\n• %s",
-			strings.Join(playbooks, "\n• "))
+		t = t + "\n*Available commands:*\n"
+		for _, env := range []string{"prod", "stage"} {
+			envPlays := playbooks.ByEnvironment(env)
+			if len(envPlays) > 0 {
+				t = t + fmt.Sprintf("\n*%s*\n%s", env, envPlays.ToBullets())
+			}
+		}
 	}
 
 	return fmt.Sprintf(t, botName)
