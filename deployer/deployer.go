@@ -40,8 +40,13 @@ func runHelp(botName, repoPath string) string {
 
 	playbooks, err := listAllowedPlaybooks(repoPath)
 	if err == nil && len(playbooks) > 0 {
-		t = t + fmt.Sprintf("\n*Available commands:*\n• %s",
-			strings.Join(playbooks, "\n• "))
+		t = t + "\n*Available commands:*\n"
+		for _, env := range []string{"prod", "stage"} {
+			envPlays := playbooks.ByEnvironment(env)
+			if len(envPlays) > 0 {
+				t = t + fmt.Sprintf("\n*%s*\n%s", env, envPlays.ToBullets())
+			}
+		}
 	}
 
 	return fmt.Sprintf(t, botName)
@@ -259,19 +264,21 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 
 func (dep *Deployer) handleDeploy(params *DeployParams) {
 	hostsFile := fmt.Sprintf("hosts_%s", params.Environment)
-	if params.Environment == "prod" {
-		hostsFile = "tools/plotly_ec2.py"
-	} else if params.Environment == "stage" {
-		hostsFile = "tools/plotly_gce"
-	}
+	hostsFile = "tools/plotly_gce"
 
+	// primary deployer syntax
 	playbookFile := fmt.Sprintf("playbook_%s.yml", params.Environment)
 	if params.Playbook != "" {
+
+		// support "@plotbot run" syntax where specific playbooks may be named
 		playbookFile = fmt.Sprintf(
 			"playbook_%s_%s.yml", params.Environment, params.Playbook,
 		)
-	} else if params.Environment == "stage" {
-		playbookFile = "playbook_gcpstage.yml"
+
+	} else if params.Environment == "stage" || params.Environment == "prod" {
+
+		// temporary until we are 100% on GCE and playbooks are renamed.
+		playbookFile = fmt.Sprintf("playbook_gcp%s.yml", params.Environment)
 	}
 
 	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile}
