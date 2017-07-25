@@ -277,8 +277,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 
 	} else if params.Environment == "stage" || params.Environment == "prod" {
 
-		// temporary until we are 100% on GCE and playbooks are renamed.
-		playbookFile = fmt.Sprintf("playbook_gcp%s.yml", params.Environment)
+		playbookFile = fmt.Sprintf("playbook_%s.yml", params.Environment)
 	}
 
 	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile}
