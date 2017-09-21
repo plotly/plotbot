@@ -73,12 +73,16 @@ type Deployer struct {
 	lockedBy       string
 }
 
-type DeployerConfig struct {
+type ServiceConfig struct {
 	RepositoryPath      string   `json:"repository_path"`
-	AnnounceRoom        string   `json:"announce_room"`
-	ProgressRoom        string   `json:"progress_room"`
 	DefaultBranch       string   `json:"default_branch"`
 	AllowedProdBranches []string `json:"allowed_prod_branches"`
+}
+
+type DeployerConfig struct {
+	AnnounceRoom string                   `json:"announce_room"`
+	ProgressRoom string                   `json:"progress_room"`
+	Services     map[string]ServiceConfig `json:"services"`
 }
 
 type DeployJob struct {
@@ -218,12 +222,12 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			}
 		}
 	} else if msg.Contains("in the pipe") {
-		url := dep.getCompareUrl("prod", dep.config.DefaultBranch)
+		url := dep.getCompareUrl("prod", dep.config.Services["streambed"].DefaultBranch)
 		mention := msg.FromUser.Name
 		if url != "" {
 			conv.Reply(msg,
 				fmt.Sprintf("@%s in %s branch, waiting to reach prod: %s",
-					mention, dep.config.DefaultBranch, url))
+					mention, dep.config.Services["streambed"].DefaultBranch, url))
 		} else {
 			conv.Reply(msg,
 				fmt.Sprintf("@%s couldn't get current revision on prod", mention))
@@ -245,7 +249,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		conv.Reply(msg, deployHelp(dep.bot.AtMention()))
 
 	} else if msg.Contains("run") && msg.ContainsAny([]string{"how", "help"}) {
-		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.RepositoryPath))
+		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.Services["streambed"].RepositoryPath))
 
 	} else if dep.confirmJob != nil {
 		waitingFor := dep.confirmJob.params.InitiatedBy
@@ -285,11 +289,11 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		cmdArgs = append(cmdArgs, "--tags", params.Tags)
 	}
 
-	branch := dep.config.DefaultBranch
+	branch := dep.config.Services["streambed"].DefaultBranch
 	if params.Branch != "" {
 		if params.Environment == "prod" {
 			ok := false
-			for _, allowed := range dep.config.AllowedProdBranches {
+			for _, allowed := range dep.config.Services["streambed"].AllowedProdBranches {
 				if allowed == params.Branch {
 					ok = true
 					break
@@ -337,7 +341,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
 
 	cmd := dep.runner.Run(cmdArgs[0], cmdArgs[1:]...)
-	cmd.Dir = dep.config.RepositoryPath
+	cmd.Dir = dep.config.Services["streambed"].RepositoryPath
 	env := append(os.Environ(), "ANSIBLE_NOCOLOR=1")
 	if cmd.Env != nil {
 		env = append(env, cmd.Env...)
@@ -376,13 +380,13 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 
 func (dep *Deployer) pullRepo(branch string) error {
 	cmd := dep.runner.Run("git", "fetch")
-	cmd.Dir = dep.config.RepositoryPath
+	cmd.Dir = dep.config.Services["streambed"].RepositoryPath
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("Error executing git fetch: %s", err)
 	}
 	cmd = dep.runner.Run("git", "checkout", fmt.Sprintf("origin/%s", branch))
-	cmd.Dir = dep.config.RepositoryPath
+	cmd.Dir = dep.config.Services["streambed"].RepositoryPath
 	return cmd.Run()
 }
 
