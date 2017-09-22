@@ -82,6 +82,7 @@ type ServiceConfig struct {
 	RepositoryPath      string   `json:"repository_path"`
 	DefaultBranch       string   `json:"default_branch"`
 	AllowedProdBranches []string `json:"allowed_prod_branches"`
+	InventoryArgs       []string `json:"inventory_args"`
 }
 
 type DeployerConfig struct {
@@ -277,9 +278,6 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 }
 
 func (dep *Deployer) handleDeploy(params *DeployParams) {
-	hostsFile := fmt.Sprintf("hosts_%s", params.Environment)
-	hostsFile = "tools/plotly_gce"
-
 	// primary deployer syntax
 	playbookFile := fmt.Sprintf("playbook_%s.yml", params.Environment)
 	if params.Playbook != "" {
@@ -294,16 +292,30 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		playbookFile = fmt.Sprintf("playbook_%s.yml", params.Environment)
 	}
 
-	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile}
+	service := params.Service
+	serviceArgs, found := dep.config.Services[service]
+
+	if !found {
+		errorMsg := fmt.Sprintf("%s is not a valid service.  Aborting.", params.Service)
+		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
+		dep.replyPersonnally(params, errorMsg)
+		return
+	}
+
+	cmdArgs := make([]string, 0)
+	cmdArgs = append(cmdArgs, "ansible-playbook")
+	cmdArgs = append(cmdArgs, serviceArgs.InventoryArgs...)
+	cmdArgs = append(cmdArgs, playbookFile)
+
 	if params.Tags != "" {
 		cmdArgs = append(cmdArgs, "--tags", params.Tags)
 	}
 
-	branch := dep.config.Services["streambed"].DefaultBranch
+	branch := serviceArgs.DefaultBranch
 	if params.Branch != "" {
 		if params.Environment == "prod" {
 			ok := false
-			for _, allowed := range dep.config.Services["streambed"].AllowedProdBranches {
+			for _, allowed := range serviceArgs.AllowedProdBranches {
 				if allowed == params.Branch {
 					ok = true
 					break
@@ -339,7 +351,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	dep.replyPersonnally(params, bot.WithMood(
 		"deploying, my friend", "deploying, yyaaahhhOooOOO!"))
 
-	if params.Environment == "prod" {
+	if params.Environment == "prod" && service == "streambed" {
 		url := dep.getCompareUrl(params.Environment, params.Branch)
 		if url != "" {
 			dep.pubLine(
