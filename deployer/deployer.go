@@ -19,10 +19,15 @@ import (
 )
 
 func deployHelp(botName string) string {
-	t := `*Usage:* %[1]s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
+	t := `*Usage:* %[1]s [please|insert reverence] deploy [<branch-or-image>] to <service> <environment> [, tags: <ansible-playbook-tags>, ..., ...]
+<branch-or-image> is a git branch (technically a committish)
+<service> defaults to streambed. imageserver is also supported.
+<environment> is prod or stage
 *Examples:*
 • %[1]s please deploy to prod
 • %[1]s deploy thing-to-test to stage
+• %[1]s deploy to imageserver prod
+• %[1]s deploy test-branch to imageserver stage
 • %[1]s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
 *Other commands:*
 • %[1]s what's in the pipe? - show what's waiting to be deployed to prod
@@ -56,7 +61,7 @@ var DEFAULT_CONFIRM_TIMEOUT = 30 * time.Second
 var CONFIRM_PLAYBOOKS = util.Searchable{
 	"postgres_recovery", "postgres_failover"}
 
-var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
+var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to (([a-z_-]+) )?([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
 
 var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
 
@@ -146,12 +151,17 @@ func (dep *Deployer) loadInternalAPI() {
 func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
-		tags := strings.Replace(match[6], " ", "", -1)
-		if tags == "" {
+		service := match[4]
+		if service == "" {
+			service = "streambed"
+		}
+		tags := strings.Replace(match[7], " ", "", -1)
+		if tags == "" && service == "streambed" {
 			tags = "updt_streambed"
 		}
 		return &DeployParams{
-			Environment:     match[3],
+			Service:         service,
+			Environment:     match[5],
 			Branch:          match[2],
 			Tags:            tags,
 			InitiatedBy:     msg.FromUser.RealName,

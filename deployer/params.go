@@ -12,6 +12,7 @@ import (
 
 type DeployParams struct {
 	Playbook        string
+	Service         string
 	Environment     string
 	Branch          string
 	Tags            string
@@ -27,7 +28,7 @@ func (p *DeployParams) String() string {
 		branch = "[default]"
 	}
 
-	str := fmt.Sprintf("env=%s branch=%s tags=%s", p.Environment, branch, p.Tags)
+	str := fmt.Sprintf("service=%s env=%s branch=%s tags=%s", p.Service, p.Environment, branch, p.Tags)
 
 	str = fmt.Sprintf("%s by %s", str, p.InitiatedBy)
 
