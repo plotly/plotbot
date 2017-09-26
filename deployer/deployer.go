@@ -335,7 +335,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		cmdArgs = append(cmdArgs, "-e", pr)
 	}
 
-	if err := dep.pullRepo(branch); err != nil {
+	if err := dep.pullRepo(branch, serviceArgs.RepositoryPath); err != nil {
 		errorMsg := fmt.Sprintf("Unable to pull from repo: %s. Aborting.", err)
 		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
 		dep.replyPersonnally(params, errorMsg)
@@ -399,15 +399,15 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	dep.runningJob = nil
 }
 
-func (dep *Deployer) pullRepo(branch string) error {
+func (dep *Deployer) pullRepo(branch, path string) error {
 	cmd := dep.runner.Run("git", "fetch")
-	cmd.Dir = dep.config.Services["streambed"].RepositoryPath
+	cmd.Dir = path
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("Error executing git fetch: %s", err)
 	}
 	cmd = dep.runner.Run("git", "checkout", fmt.Sprintf("origin/%s", branch))
-	cmd.Dir = dep.config.Services["streambed"].RepositoryPath
+	cmd.Dir = path
 	return cmd.Run()
 }
 
