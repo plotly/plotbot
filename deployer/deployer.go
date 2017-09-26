@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -233,7 +234,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			}
 		}
 	} else if msg.Contains("in the pipe") {
-		url := dep.getCompareUrl("prod", dep.config.Services["streambed"].DefaultBranch)
+		url := dep.getCompareUrl("prod", dep.config.Services["streambed"].DefaultBranch, dep.config.Services["streambed"].RepositoryPath)
 		mention := msg.FromUser.Name
 		if url != "" {
 			conv.Reply(msg,
@@ -351,12 +352,10 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	dep.replyPersonnally(params, bot.WithMood(
 		"deploying, my friend", "deploying, yyaaahhhOooOOO!"))
 
-	if params.Environment == "prod" && service == "streambed" {
-		url := dep.getCompareUrl(params.Environment, params.Branch)
-		if url != "" {
-			dep.pubLine(
-				fmt.Sprintf("[deployer] Compare what is being pushed: %s", url))
-		}
+	url := dep.getCompareUrl(params.Environment, params.Branch, serviceArgs.RepositoryPath)
+	if url != "" {
+		dep.pubLine(
+			fmt.Sprintf("[deployer] Compare what is being pushed: %s", url))
 	}
 
 	dep.pubLine(
@@ -480,17 +479,19 @@ func (dep *Deployer) replyPersonnally(params *DeployParams, msg string) {
 	dep.bot.ReplyMention(params.initiatedByChat, msg)
 }
 
-func (dep *Deployer) getCompareUrl(env, branch string) string {
-	if dep.internal == nil {
+func (dep *Deployer) getCompareUrl(env, branch, path string) string {
+	itp := filepath.Join(path, "tools/in_the_pipe")
+	if _, err := os.Stat(itp); os.IsNotExist(err) {
 		return ""
 	}
 
-	currentHead := dep.internal.GetCurrentHead(env)
-	if currentHead == "" {
+	cmd := exec.Command(itp, (*dep.internal.Config)[env].BaseURL, (*dep.internal.Config)[env].AuthKey, env, branch)
+	cmd.Dir = path
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		return ""
 	}
 
-	url := fmt.Sprintf("https://github.com/plotly/streambed/compare/%s...%s",
-		currentHead, branch)
-	return url
+	return string(out)
 }
