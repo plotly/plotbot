@@ -331,7 +331,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 			}
 		}
 		branch = params.Branch
-		pr := fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch)
+		pr := fmt.Sprintf("%s_pull_revision=origin/%s", service, params.Branch)
 		cmdArgs = append(cmdArgs, "-e", pr)
 	}
 
@@ -362,7 +362,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
 
 	cmd := dep.runner.Run(cmdArgs[0], cmdArgs[1:]...)
-	cmd.Dir = dep.config.Services["streambed"].RepositoryPath
+	cmd.Dir = serviceArgs.RepositoryPath
 	env := append(os.Environ(), "ANSIBLE_NOCOLOR=1")
 	if cmd.Env != nil {
 		env = append(env, cmd.Env...)
