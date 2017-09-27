@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -369,9 +368,26 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	}
 	cmd.Env = env
 
-	pty, err := pty.Start(cmd)
+	err := dep.runWithOutput(cmd, params)
+
 	if err != nil {
-		log.Fatal(err)
+		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
+		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
+	} else {
+
+		dep.pubLine("[deployer] terminated successfully")
+		dep.replyPersonnally(params,
+			bot.WithMood("your deploy was successful",
+				"your deploy was GREAT, you're great !"))
+	}
+	return
+}
+
+func (dep *Deployer) runWithOutput(cmd *exec.Cmd, params *DeployParams) error {
+	f, err := pty.Start(cmd)
+
+	if err != nil {
+		return err
 	}
 
 	dep.runningJob = &DeployJob{
@@ -381,22 +397,19 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		kill:    make(chan bool, 2),
 	}
 
-	go dep.manageDeployIo(pty)
-	go dep.manageKillProcess(pty)
+	go dep.manageDeployIo(f)
+	go dep.manageKillProcess(f)
 
-	if err := cmd.Wait(); err != nil {
-		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
-		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
-
-	} else {
-		dep.pubLine("[deployer] terminated successfully")
-		dep.replyPersonnally(params,
-			bot.WithMood("your deploy was successful",
-				"your deploy was GREAT, you're great !"))
-	}
+	err = cmd.Wait()
 
 	dep.runningJob.quit <- true
 	dep.runningJob = nil
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (dep *Deployer) pullRepo(branch, path string) error {
