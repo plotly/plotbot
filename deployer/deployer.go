@@ -373,13 +373,29 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	if err != nil {
 		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
 		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
-	} else {
 
-		dep.pubLine("[deployer] terminated successfully")
-		dep.replyPersonnally(params,
-			bot.WithMood("your deploy was successful",
-				"your deploy was GREAT, you're great !"))
+		return
 	}
+
+	wd := filepath.Join(serviceArgs.RepositoryPath, "tools/watch_deployment")
+	if _, err := os.Stat(wd); !os.IsNotExist(err) {
+		cmd = exec.Command(wd)
+		cmd.Dir = serviceArgs.RepositoryPath
+
+		err := dep.runWithOutput(cmd, params)
+
+		if err != nil {
+			dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
+			dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
+
+			return
+		}
+	}
+
+	dep.pubLine("[deployer] terminated successfully")
+	dep.replyPersonnally(params,
+		bot.WithMood("your deploy was successful",
+			"your deploy was GREAT, you're great !"))
 	return
 }
 
