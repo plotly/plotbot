@@ -36,20 +36,22 @@ func deployHelp(botName string) string {
 • %[1]s run help - show help on running specific playbooks in an environment`
 	return fmt.Sprintf(t, botName)
 }
-
-func runHelp(botName, repoPath string) string {
-	t := `*Usage:* %[1]s [please|insert reverence] run [<playbook suffix>] in <environment> [, tags: <ansible-playbook tags>, ..., ...]
+func runHelp(botName string, services map[string]ServiceConfig) string {
+	t := `*Usage:* %[1]s [please|insert reverence] run [<playbook suffix>] in <service> <environment> [, tags: <ansible-playbook tags>, ..., ...]
 *Examples:*
 • %[1]s run postgres_failover on prod
-• %[1]s run postgres_recovery on stage with tags: everything_is_broken`
+• %[1]s run update_plotlyjs on imageserver prod
+• %[1]s run postgres_recovery on streambed stage with tags: everything_is_broken`
 
-	playbooks, err := listAllowedPlaybooks(repoPath)
-	if err == nil && len(playbooks) > 0 {
-		t = t + "\n*Available commands:*\n"
-		for _, env := range []string{"prod", "stage"} {
-			envPlays := playbooks.ByEnvironment(env)
-			if len(envPlays) > 0 {
-				t = t + fmt.Sprintf("\n*%s*\n%s", env, envPlays.ToBullets())
+	for service, serviceArgs := range services {
+		playbooks, err := listAllowedPlaybooks(serviceArgs.RepositoryPath)
+		if err == nil && len(playbooks) > 0 {
+			t = t + fmt.Sprintf("\n\n*Available commands for %s:*", service)
+			for _, env := range []string{"prod", "stage"} {
+				envPlays := playbooks.ByEnvironment(env)
+				if len(envPlays) > 0 {
+					t = t + fmt.Sprintf("\n*%s*\n%s", env, envPlays.ToBullets())
+				}
 			}
 		}
 	}
@@ -260,7 +262,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		conv.Reply(msg, deployHelp(dep.bot.AtMention()))
 
 	} else if msg.Contains("run") && msg.ContainsAny([]string{"how", "help"}) {
-		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.Services["streambed"].RepositoryPath))
+		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.Services))
 
 	} else if dep.confirmJob != nil {
 		waitingFor := dep.confirmJob.params.InitiatedBy
