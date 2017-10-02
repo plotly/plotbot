@@ -65,7 +65,7 @@ var CONFIRM_PLAYBOOKS = util.Searchable{
 
 var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to (([a-z_-]+) )?([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
 
-var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
+var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+(([a-z_-]+)\s+)?([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
 
 type Deployer struct {
 	runner         Runnable
@@ -173,10 +173,15 @@ func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 		}
 
 	} else if match := runFormat.FindStringSubmatch(msg.Text); match != nil {
+		service := match[3]
+		if service == "" {
+			service = "streambed"
+		}
 		return &DeployParams{
+			Service:         service,
 			Playbook:        match[1],
-			Environment:     match[2],
-			Tags:            match[5],
+			Environment:     match[4],
+			Tags:            match[7],
 			InitiatedBy:     msg.FromUser.RealName,
 			From:            "chat",
 			initiatedByChat: msg,
