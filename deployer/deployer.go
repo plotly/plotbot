@@ -386,7 +386,7 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 
 	wd := filepath.Join(serviceArgs.RepositoryPath, "tools/watch_deployment")
 	if _, err := os.Stat(wd); !os.IsNotExist(err) {
-		cmd = exec.Command(wd)
+		cmd = dep.runner.Run(wd)
 		cmd.Dir = serviceArgs.RepositoryPath
 
 		err := dep.runWithOutput(cmd, params)
@@ -521,7 +521,7 @@ func (dep *Deployer) getCompareUrl(env, branch, path string) string {
 		return ""
 	}
 
-	cmd := exec.Command(itp, (*dep.internal.Config)[env].BaseURL, (*dep.internal.Config)[env].AuthKey, env, branch)
+	cmd := dep.runner.Run(itp, (*dep.internal.Config)[env].BaseURL, (*dep.internal.Config)[env].AuthKey, env, branch)
 	cmd.Dir = path
 
 	out, err := cmd.CombinedOutput()
