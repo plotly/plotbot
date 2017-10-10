@@ -24,28 +24,29 @@ func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Dep
 		log.Fatal(err)
 	}
 
-	defaultdconf := DeployerConfig{
-		RepositoryPath:      filepath.Dir(execPath),
-		AnnounceRoom:        "#streambed",
-		ProgressRoom:        "#deploy",
-		DefaultBranch:       "production",
-		AllowedProdBranches: []string{"master"},
+	serviceConfigs := map[string]ServiceConfig{
+		"streambed": {
+			RepositoryPath:      filepath.Dir(execPath),
+			DefaultBranch:       "production",
+			AllowedProdBranches: []string{"master"},
+			InventoryArgs:       []string{"-i", "tools/plotly_gce"},
+		},
 	}
 
-	if dconf.RepositoryPath != "" {
-		defaultdconf.RepositoryPath = dconf.RepositoryPath
+	defaultdconf := DeployerConfig{
+		AnnounceRoom: "#streambed",
+		ProgressRoom: "#deploy",
+		Services:     serviceConfigs,
+	}
+
+	if dconf.Services != nil {
+		defaultdconf.Services = dconf.Services
 	}
 	if dconf.AnnounceRoom != "" {
 		defaultdconf.AnnounceRoom = dconf.AnnounceRoom
 	}
 	if dconf.ProgressRoom != "" {
 		defaultdconf.ProgressRoom = dconf.ProgressRoom
-	}
-	if dconf.DefaultBranch != "" {
-		defaultdconf.DefaultBranch = dconf.DefaultBranch
-	}
-	if len(dconf.AllowedProdBranches) != 0 {
-		defaultdconf.AllowedProdBranches = dconf.AllowedProdBranches
 	}
 
 	return &Deployer{
