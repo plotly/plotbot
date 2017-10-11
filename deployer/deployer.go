@@ -41,7 +41,7 @@ func runHelp(botName string, services map[string]ServiceConfig) string {
 *Examples:*
 • %[1]s run postgres_failover on prod
 • %[1]s run update_plotlyjs on imageserver prod
-• %[1]s run postgres_recovery on streambed stage with tags: everything_is_broken`
+• %[1]s run postgres_recovery on streambed stage, tags: everything_is_broken`
 
 	for service, serviceArgs := range services {
 		playbooks, err := listAllowedPlaybooks(serviceArgs.RepositoryPath)
@@ -63,9 +63,9 @@ var DEFAULT_CONFIRM_TIMEOUT = 30 * time.Second
 var CONFIRM_PLAYBOOKS = util.Searchable{
 	"postgres_recovery", "postgres_failover"}
 
-var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to (([a-z_-]+) )?([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
+var deployFormat = regexp.MustCompile(`deploy(?: ([a-zA-Z0-9_\.-]+))? to (?:([a-z_-]+) )?([a-z_-]+)(?:,\s+tags?:? ?(.+))?`)
 
-var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+(([a-z_-]+)\s+)?([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
+var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+(?:([a-z_-]+)\s+)?([a-z_-]+)(?:,\s+tags?:? ?(.+))?`)
 
 type Deployer struct {
 	runner         Runnable
@@ -154,18 +154,18 @@ func (dep *Deployer) loadInternalAPI() {
 func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
-		service := match[4]
+		service := match[2]
 		if service == "" {
 			service = "streambed"
 		}
-		tags := strings.Replace(match[7], " ", "", -1)
+		tags := strings.Replace(match[4], " ", "", -1)
 		if tags == "" && service == "streambed" {
 			tags = "updt_streambed"
 		}
 		return &DeployParams{
 			Service:         service,
-			Environment:     match[5],
-			Branch:          match[2],
+			Environment:     match[3],
+			Branch:          match[1],
 			Tags:            tags,
 			InitiatedBy:     msg.FromUser.RealName,
 			From:            "chat",
@@ -173,15 +173,15 @@ func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 		}
 
 	} else if match := runFormat.FindStringSubmatch(msg.Text); match != nil {
-		service := match[3]
+		service := match[2]
 		if service == "" {
 			service = "streambed"
 		}
 		return &DeployParams{
 			Service:         service,
 			Playbook:        match[1],
-			Environment:     match[4],
-			Tags:            match[7],
+			Environment:     match[3],
+			Tags:            match[4],
 			InitiatedBy:     msg.FromUser.RealName,
 			From:            "chat",
 			initiatedByChat: msg,

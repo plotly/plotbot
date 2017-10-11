@@ -212,7 +212,7 @@ func TestStageDeploy(t *testing.T) {
 func TestProdDeployWithTags(t *testing.T) {
 	dep := defaultTestDep(time.Second)
 	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
-		testutils.ToBotMsg(dep.bot, "deploy to prod with tags: umwelt"))
+		testutils.ToBotMsg(dep.bot, "deploy to prod, tags: umwelt"))
 
 	progress, err := captureProgress(dep, time.Second*2)
 	if err != nil {
@@ -591,7 +591,7 @@ func TestFailedAnsible(t *testing.T) {
 		})
 
 	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
-		testutils.ToBotMsg(dep.bot, "deploy to prod with tags: onions"))
+		testutils.ToBotMsg(dep.bot, "deploy to prod, tags: onions"))
 
 	progress, err := captureProgress(dep, time.Millisecond*500)
 	if err != nil {
