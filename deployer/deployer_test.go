@@ -24,6 +24,11 @@ func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Dep
 			AllowedProdBranches: []string{"master"},
 			InventoryArgs:       []string{"-i", "tools/plotly_gce"},
 		},
+		"testrepo": {
+			RepositoryPath:      "/tmp",
+			DefaultBranch:       "testbranch",
+			AllowedProdBranches: []string{"master"},
+		},
 	}
 
 	defaultdconf := DeployerConfig{
@@ -247,6 +252,66 @@ func TestProdDeployWithTags(t *testing.T) {
 	expected = fmt.Sprintf("<@%s> your deploy was successful", testutils.DefaultFromUser)
 	if actual != expected {
 		t.Errorf("expected '%s' but found '%s'", expected, actual)
+	}
+}
+
+func TestDeployOtherService(t *testing.T) {
+	dep := defaultTestDep(time.Second)
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to testrepo prod"))
+
+	progress, err := captureProgress(dep, time.Second*2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectContain := util.Searchable{"ansible-playbook playbook_prod.yml",
+		"GO_CMD_WD=/tmp",
+		"{{ansible-output}}",
+		"terminated successfully",
+	}
+
+	if !progress.ContainsAll(expectContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 2 {
+		t.Fatalf("expected 2 replies found %d", len(bot.TestReplies))
+	}
+}
+
+func TestDeployInvalidService(t *testing.T) {
+	dep := defaultTestDep(0)
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "deploy to invalid stage"))
+
+	progress, err := captureProgress(dep, time.Millisecond*500)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectContain := util.Searchable{
+		"invalid is not a valid service",
+	}
+
+	if !progress.ContainsAll(expectContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	replies := bot.TestReplies
+	if len(replies) != 1 {
+		t.Fatalf("expected 1 reply got %d", len(replies))
+	}
+
+	actual := replies[0].Text
+	expected := "invalid is not a valid service"
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected reply '%s' to contain '%s'", actual, expected)
 	}
 }
 
@@ -767,5 +832,47 @@ func TestRunHelp(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(actual), "postgres_failover") {
 		t.Errorf("expected reply '%s' to contain '%s'", actual, "examples")
+	}
+}
+
+func TestRunOtherService(t *testing.T) {
+	dep := defaultTestDep(time.Second * 1)
+
+	dep.ChatHandler(&plotbot.Conversation{Bot: dep.bot},
+		testutils.ToBotMsg(dep.bot, "run testcmd on testrepo stage"))
+
+	progress, err := captureProgress(dep, time.Second*2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectContain := util.Searchable{
+		"GO_CMD_WD=/tmp",
+		"ansible-playbook playbook_stage_testcmd.yml",
+		"{{ansible-output}}",
+		"terminated successfully",
+	}
+
+	if !progress.ContainsAll(expectContain...) {
+		t.Errorf("expected progress %s to contain all of %s", progress.String(),
+			expectContain.String())
+	}
+
+	bot := dep.bot.(*testutils.MockBot)
+	if len(bot.TestReplies) != 2 {
+		t.Fatalf("expected 2 replies found %d", len(bot.TestReplies))
+	}
+
+	actual := bot.TestReplies[0].Text
+	expected := fmt.Sprintf("<@%s> deploying, my friend", testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' but found '%s'", actual, expected)
+	}
+
+	actual = bot.TestReplies[1].Text
+	expected = fmt.Sprintf("<@%s> your deploy was successful",
+		testutils.DefaultFromUser)
+	if !strings.Contains(actual, expected) {
+		t.Errorf("expected '%s' but found '%s'", actual, expected)
 	}
 }
