@@ -2,9 +2,7 @@ package deployer
 
 import (
 	"fmt"
-	"log"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,14 +17,9 @@ var TEST_CONFIRM_TIMEOUT = time.Second
 
 func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Deployer {
 
-	execPath, err := os.Executable()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	serviceConfigs := map[string]ServiceConfig{
 		"streambed": {
-			RepositoryPath:      filepath.Dir(execPath),
+			RepositoryPath:      "/usr/local",
 			DefaultBranch:       "production",
 			AllowedProdBranches: []string{"master"},
 			InventoryArgs:       []string{"-i", "tools/plotly_gce"},
@@ -127,6 +120,13 @@ func TestCmdProcess(t *testing.T) {
 		time.Sleep(time.Second * time.Duration(i))
 	}
 
+	cwd, err := os.Getwd()
+	if err == nil {
+		fmt.Printf("GO_CMD_WD=%s\n", cwd)
+	} else {
+		fmt.Printf("Error determining working directory: %s\n", err)
+	}
+
 	output := os.Getenv("GO_CMD_PROCESS_OUTPUT")
 	if output != "" {
 		fmt.Println(output)
@@ -168,6 +168,7 @@ func TestStageDeploy(t *testing.T) {
 
 	expectContain := util.Searchable{
 		"ansible-playbook -i tools/",
+		"GO_CMD_WD=/usr/local",
 		"--tags updt_streambed",
 		"{{ansible-output}}",
 		"terminated successfully",
@@ -220,6 +221,7 @@ func TestProdDeployWithTags(t *testing.T) {
 	}
 
 	expectContain := util.Searchable{"ansible-playbook -i tools/",
+		"GO_CMD_WD=/usr/local",
 		"--tags umwelt",
 		"{{ansible-output}}",
 		"terminated successfully",
@@ -696,6 +698,7 @@ func TestRunPlaybookConfirmationSuccess(t *testing.T) {
 	}
 
 	expectContain := util.Searchable{
+		"GO_CMD_WD=/usr/local",
 		"playbook_stage_postgres_recovery.yml",
 		"{{ansible-output}}",
 		"terminated successfully",
