@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -19,10 +19,15 @@ import (
 )
 
 func deployHelp(botName string) string {
-	t := `*Usage:* %[1]s [please|insert reverence] deploy [<branch-name>] to <environment> [, tags: <ansible-playbook tags>, ..., ...]
+	t := `*Usage:* %[1]s [please|insert reverence] deploy [<branch-or-image>] to <service> <environment> [, tags: <ansible-playbook-tags>, ..., ...]
+<branch-or-image> is a git branch (technically a committish)
+<service> defaults to streambed. imageserver is also supported.
+<environment> is prod or stage
 *Examples:*
 • %[1]s please deploy to prod
 • %[1]s deploy thing-to-test to stage
+• %[1]s deploy to imageserver prod
+• %[1]s deploy test-branch to imageserver stage
 • %[1]s deploy complicated-thing to stage, tags: updt_streambed, blow_up_the_sun
 *Other commands:*
 • %[1]s what's in the pipe? - show what's waiting to be deployed to prod
@@ -31,20 +36,22 @@ func deployHelp(botName string) string {
 • %[1]s run help - show help on running specific playbooks in an environment`
 	return fmt.Sprintf(t, botName)
 }
-
-func runHelp(botName, repoPath string) string {
-	t := `*Usage:* %[1]s [please|insert reverence] run [<playbook suffix>] in <environment> [, tags: <ansible-playbook tags>, ..., ...]
+func runHelp(botName string, services map[string]ServiceConfig) string {
+	t := `*Usage:* %[1]s [please|insert reverence] run [<playbook suffix>] in <service> <environment> [, tags: <ansible-playbook tags>, ..., ...]
 *Examples:*
 • %[1]s run postgres_failover on prod
-• %[1]s run postgres_recovery on stage with tags: everything_is_broken`
+• %[1]s run update_plotlyjs on imageserver prod
+• %[1]s run postgres_recovery on streambed stage, tags: everything_is_broken`
 
-	playbooks, err := listAllowedPlaybooks(repoPath)
-	if err == nil && len(playbooks) > 0 {
-		t = t + "\n*Available commands:*\n"
-		for _, env := range []string{"prod", "stage"} {
-			envPlays := playbooks.ByEnvironment(env)
-			if len(envPlays) > 0 {
-				t = t + fmt.Sprintf("\n*%s*\n%s", env, envPlays.ToBullets())
+	for service, serviceArgs := range services {
+		playbooks, err := listAllowedPlaybooks(serviceArgs.RepositoryPath)
+		if err == nil && len(playbooks) > 0 {
+			t = t + fmt.Sprintf("\n\n*Available commands for %s:*", service)
+			for _, env := range []string{"prod", "stage"} {
+				envPlays := playbooks.ByEnvironment(env)
+				if len(envPlays) > 0 {
+					t = t + fmt.Sprintf("\n*%s*\n%s", env, envPlays.ToBullets())
+				}
 			}
 		}
 	}
@@ -56,9 +63,9 @@ var DEFAULT_CONFIRM_TIMEOUT = 30 * time.Second
 var CONFIRM_PLAYBOOKS = util.Searchable{
 	"postgres_recovery", "postgres_failover"}
 
-var deployFormat = regexp.MustCompile(`deploy( ([a-zA-Z0-9_\.-]+))? to ([a-z_-]+)((,| with)? tags?:? ?(.+))?`)
+var deployFormat = regexp.MustCompile(`deploy(?: ([a-zA-Z0-9_\.-]+))? to (?:([a-z_-]+) )?([a-z_-]+)(?:,\s+tags?:? ?(.+))?`)
 
-var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+([a-z_-]+)((,|\s*with)?\s+tags?:? ?(.+))?`)
+var runFormat = regexp.MustCompile(`run\s+([a-zA-Z0-9_\.-]+)\s+on\s+(?:([a-z_-]+)\s+)?([a-z_-]+)(?:,\s+tags?:? ?(.+))?`)
 
 type Deployer struct {
 	runner         Runnable
@@ -73,12 +80,17 @@ type Deployer struct {
 	lockedBy       string
 }
 
-type DeployerConfig struct {
+type ServiceConfig struct {
 	RepositoryPath      string   `json:"repository_path"`
-	AnnounceRoom        string   `json:"announce_room"`
-	ProgressRoom        string   `json:"progress_room"`
 	DefaultBranch       string   `json:"default_branch"`
 	AllowedProdBranches []string `json:"allowed_prod_branches"`
+	InventoryArgs       []string `json:"inventory_args"`
+}
+
+type DeployerConfig struct {
+	AnnounceRoom string                   `json:"announce_room"`
+	ProgressRoom string                   `json:"progress_room"`
+	Services     map[string]ServiceConfig `json:"services"`
 }
 
 type DeployJob struct {
@@ -142,13 +154,18 @@ func (dep *Deployer) loadInternalAPI() {
 func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 
 	if match := deployFormat.FindStringSubmatch(msg.Text); match != nil {
-		tags := strings.Replace(match[6], " ", "", -1)
-		if tags == "" {
+		service := match[2]
+		if service == "" {
+			service = "streambed"
+		}
+		tags := strings.Replace(match[4], " ", "", -1)
+		if tags == "" && service == "streambed" {
 			tags = "updt_streambed"
 		}
 		return &DeployParams{
+			Service:         service,
 			Environment:     match[3],
-			Branch:          match[2],
+			Branch:          match[1],
 			Tags:            tags,
 			InitiatedBy:     msg.FromUser.RealName,
 			From:            "chat",
@@ -156,10 +173,15 @@ func (dep *Deployer) ExtractDeployParams(msg *plotbot.Message) *DeployParams {
 		}
 
 	} else if match := runFormat.FindStringSubmatch(msg.Text); match != nil {
+		service := match[2]
+		if service == "" {
+			service = "streambed"
+		}
 		return &DeployParams{
+			Service:         service,
 			Playbook:        match[1],
-			Environment:     match[2],
-			Tags:            match[5],
+			Environment:     match[3],
+			Tags:            match[4],
 			InitiatedBy:     msg.FromUser.RealName,
 			From:            "chat",
 			initiatedByChat: msg,
@@ -218,12 +240,12 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 			}
 		}
 	} else if msg.Contains("in the pipe") {
-		url := dep.getCompareUrl("prod", dep.config.DefaultBranch)
+		url := dep.getCompareUrl("prod", dep.config.Services["streambed"].DefaultBranch, dep.config.Services["streambed"].RepositoryPath)
 		mention := msg.FromUser.Name
 		if url != "" {
 			conv.Reply(msg,
 				fmt.Sprintf("@%s in %s branch, waiting to reach prod: %s",
-					mention, dep.config.DefaultBranch, url))
+					mention, dep.config.Services["streambed"].DefaultBranch, url))
 		} else {
 			conv.Reply(msg,
 				fmt.Sprintf("@%s couldn't get current revision on prod", mention))
@@ -245,7 +267,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		conv.Reply(msg, deployHelp(dep.bot.AtMention()))
 
 	} else if msg.Contains("run") && msg.ContainsAny([]string{"how", "help"}) {
-		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.RepositoryPath))
+		conv.Reply(msg, runHelp(dep.bot.AtMention(), dep.config.Services))
 
 	} else if dep.confirmJob != nil {
 		waitingFor := dep.confirmJob.params.InitiatedBy
@@ -263,9 +285,6 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 }
 
 func (dep *Deployer) handleDeploy(params *DeployParams) {
-	hostsFile := fmt.Sprintf("hosts_%s", params.Environment)
-	hostsFile = "tools/plotly_gce"
-
 	// primary deployer syntax
 	playbookFile := fmt.Sprintf("playbook_%s.yml", params.Environment)
 	if params.Playbook != "" {
@@ -280,16 +299,30 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		playbookFile = fmt.Sprintf("playbook_%s.yml", params.Environment)
 	}
 
-	cmdArgs := []string{"ansible-playbook", "-i", hostsFile, playbookFile}
+	service := params.Service
+	serviceArgs, found := dep.config.Services[service]
+
+	if !found {
+		errorMsg := fmt.Sprintf("%s is not a valid service.  Aborting.", params.Service)
+		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
+		dep.replyPersonnally(params, errorMsg)
+		return
+	}
+
+	cmdArgs := make([]string, 0)
+	cmdArgs = append(cmdArgs, "ansible-playbook")
+	cmdArgs = append(cmdArgs, serviceArgs.InventoryArgs...)
+	cmdArgs = append(cmdArgs, playbookFile)
+
 	if params.Tags != "" {
 		cmdArgs = append(cmdArgs, "--tags", params.Tags)
 	}
 
-	branch := dep.config.DefaultBranch
+	branch := serviceArgs.DefaultBranch
 	if params.Branch != "" {
 		if params.Environment == "prod" {
 			ok := false
-			for _, allowed := range dep.config.AllowedProdBranches {
+			for _, allowed := range serviceArgs.AllowedProdBranches {
 				if allowed == params.Branch {
 					ok = true
 					break
@@ -304,11 +337,11 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 			}
 		}
 		branch = params.Branch
-		pr := fmt.Sprintf("streambed_pull_revision=origin/%s", params.Branch)
+		pr := fmt.Sprintf("%s_pull_revision=origin/%s", service, params.Branch)
 		cmdArgs = append(cmdArgs, "-e", pr)
 	}
 
-	if err := dep.pullRepo(branch); err != nil {
+	if err := dep.pullRepo(branch, serviceArgs.RepositoryPath); err != nil {
 		errorMsg := fmt.Sprintf("Unable to pull from repo: %s. Aborting.", err)
 		dep.pubLine(fmt.Sprintf("[deployer] %s", errorMsg))
 		dep.replyPersonnally(params, errorMsg)
@@ -325,28 +358,59 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 	dep.replyPersonnally(params, bot.WithMood(
 		"deploying, my friend", "deploying, yyaaahhhOooOOO!"))
 
-	if params.Environment == "prod" {
-		url := dep.getCompareUrl(params.Environment, params.Branch)
-		if url != "" {
-			dep.pubLine(
-				fmt.Sprintf("[deployer] Compare what is being pushed: %s", url))
-		}
+	url := dep.getCompareUrl(params.Environment, params.Branch, serviceArgs.RepositoryPath)
+	if url != "" {
+		dep.pubLine(
+			fmt.Sprintf("[deployer] Compare what is being pushed: %s", url))
 	}
 
 	dep.pubLine(
 		fmt.Sprintf("[deployer] Running cmd: %s", strings.Join(cmdArgs, " ")))
 
 	cmd := dep.runner.Run(cmdArgs[0], cmdArgs[1:]...)
-	cmd.Dir = dep.config.RepositoryPath
+	cmd.Dir = serviceArgs.RepositoryPath
 	env := append(os.Environ(), "ANSIBLE_NOCOLOR=1")
 	if cmd.Env != nil {
 		env = append(env, cmd.Env...)
 	}
 	cmd.Env = env
 
-	pty, err := pty.Start(cmd)
+	err := dep.runWithOutput(cmd, params)
+
 	if err != nil {
-		log.Fatal(err)
+		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
+		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
+
+		return
+	}
+
+	wd := filepath.Join(serviceArgs.RepositoryPath, "tools/watch_deployment")
+	if _, err := os.Stat(wd); !os.IsNotExist(err) {
+		cmd = dep.runner.Run(wd)
+		cmd.Dir = serviceArgs.RepositoryPath
+
+		err := dep.runWithOutput(cmd, params)
+
+		if err != nil {
+			dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
+			dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
+
+			return
+		}
+	}
+
+	dep.pubLine("[deployer] terminated successfully")
+	dep.replyPersonnally(params,
+		bot.WithMood("your deploy was successful",
+			"your deploy was GREAT, you're great !"))
+	return
+}
+
+func (dep *Deployer) runWithOutput(cmd *exec.Cmd, params *DeployParams) error {
+	f, err := pty.Start(cmd)
+
+	if err != nil {
+		return err
 	}
 
 	dep.runningJob = &DeployJob{
@@ -356,33 +420,30 @@ func (dep *Deployer) handleDeploy(params *DeployParams) {
 		kill:    make(chan bool, 2),
 	}
 
-	go dep.manageDeployIo(pty)
-	go dep.manageKillProcess(pty)
+	go dep.manageDeployIo(f)
+	go dep.manageKillProcess(f)
 
-	if err := cmd.Wait(); err != nil {
-		dep.pubLine(fmt.Sprintf("[deployer] terminated with error: %s", err))
-		dep.replyPersonnally(params, fmt.Sprintf("your deploy failed: %s", err))
-
-	} else {
-		dep.pubLine("[deployer] terminated successfully")
-		dep.replyPersonnally(params,
-			bot.WithMood("your deploy was successful",
-				"your deploy was GREAT, you're great !"))
-	}
+	err = cmd.Wait()
 
 	dep.runningJob.quit <- true
 	dep.runningJob = nil
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (dep *Deployer) pullRepo(branch string) error {
+func (dep *Deployer) pullRepo(branch, path string) error {
 	cmd := dep.runner.Run("git", "fetch")
-	cmd.Dir = dep.config.RepositoryPath
+	cmd.Dir = path
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("Error executing git fetch: %s", err)
 	}
 	cmd = dep.runner.Run("git", "checkout", fmt.Sprintf("origin/%s", branch))
-	cmd.Dir = dep.config.RepositoryPath
+	cmd.Dir = path
 	return cmd.Run()
 }
 
@@ -454,17 +515,19 @@ func (dep *Deployer) replyPersonnally(params *DeployParams, msg string) {
 	dep.bot.ReplyMention(params.initiatedByChat, msg)
 }
 
-func (dep *Deployer) getCompareUrl(env, branch string) string {
-	if dep.internal == nil {
+func (dep *Deployer) getCompareUrl(env, branch, path string) string {
+	itp := filepath.Join(path, "tools/in_the_pipe")
+	if _, err := os.Stat(itp); os.IsNotExist(err) {
 		return ""
 	}
 
-	currentHead := dep.internal.GetCurrentHead(env)
-	if currentHead == "" {
+	cmd := dep.runner.Run(itp, (*dep.internal.Config)[env].BaseURL, (*dep.internal.Config)[env].AuthKey, env, branch)
+	cmd.Dir = path
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
 		return ""
 	}
 
-	url := fmt.Sprintf("https://github.com/plotly/streambed/compare/%s...%s",
-		currentHead, branch)
-	return url
+	return string(out)
 }
