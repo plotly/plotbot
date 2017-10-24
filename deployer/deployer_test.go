@@ -2,15 +2,19 @@ package deployer
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/plotly/plotbot"
+	"github.com/plotly/plotbot/internal"
 	"github.com/plotly/plotbot/testutils"
 	"github.com/plotly/plotbot/util"
+	"github.com/stretchr/testify/assert"
 )
 
 var TEST_CONFIRM_TIMEOUT = time.Second
@@ -47,12 +51,23 @@ func newTestDep(dconf DeployerConfig, bot plotbot.BotLike, runner Runnable) *Dep
 		defaultdconf.ProgressRoom = dconf.ProgressRoom
 	}
 
+	iconf := internal.InternalAPIConfig{
+		"prod": {
+			BaseURL: "https://example.com/internal/",
+			AuthKey: "test_auth_key",
+		},
+	}
+	iapi := internal.InternalAPI{
+		Config: &iconf,
+	}
+
 	return &Deployer{
 		config:         &defaultdconf,
 		bot:            bot,
 		runner:         runner,
 		progress:       make(chan string, 1000),
 		confirmTimeout: TEST_CONFIRM_TIMEOUT,
+		internal:       &iapi,
 	}
 }
 
@@ -875,4 +890,28 @@ func TestRunOtherService(t *testing.T) {
 	if !strings.Contains(actual, expected) {
 		t.Errorf("expected '%s' but found '%s'", actual, expected)
 	}
+}
+
+func TestGetCompareUrl(t *testing.T) {
+	dir, err := ioutil.TempDir("", "deptest")
+	if err != nil {
+		t.Fatalf("error creating temporary directory: %s", err)
+	}
+
+	defer os.RemoveAll(dir)
+
+	dep := newTestDep(
+		DeployerConfig{},
+		testutils.NewDefaultMockBot(),
+		&Runner{},
+	)
+
+	assert.Equal(t, "", dep.getCompareUrl("prod", "master", dir), "compare URL empty when in_the_pipe missing")
+
+	os.Mkdir(path.Join(dir, "tools"), os.ModePerm)
+	ioutil.WriteFile(path.Join(dir, "tools", "in_the_pipe"), []byte("#!/bin/bash\necho -n https://pipeurl\n"), 0755)
+
+	assert.Equal(t, "", dep.getCompareUrl("unconfigured", "master", dir), "compare URL empty with unconfigured environment")
+
+	assert.Equal(t, "https://pipeurl", dep.getCompareUrl("prod", "master", dir), "compare URL incorrect")
 }
