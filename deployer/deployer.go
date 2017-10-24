@@ -521,7 +521,12 @@ func (dep *Deployer) getCompareUrl(env, branch, path string) string {
 		return ""
 	}
 
-	cmd := dep.runner.Run(itp, (*dep.internal.Config)[env].BaseURL, (*dep.internal.Config)[env].AuthKey, env, branch)
+	intConf, exists := (*dep.internal.Config)[env]
+	if !exists {
+		return ""
+	}
+
+	cmd := dep.runner.Run(itp, intConf.BaseURL, intConf.AuthKey, env, branch)
 	cmd.Dir = path
 
 	out, err := cmd.CombinedOutput()
