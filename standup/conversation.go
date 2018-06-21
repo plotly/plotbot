@@ -109,7 +109,7 @@ func (standup *Standup) manageUpdatesInteraction() {
 			remain := strings.Join(remains, " or ")
 
 			if remain != "" {
-				standup.bot.ReplyMention(msg, fmt.Sprintf("what about %s ?", remain))
+				standup.bot.ReplyMention(msg, fmt.Sprintf("what about %s ? Could you please copy your message, paste it back, change it to fix this and sent it again ? (I didn't have my coffee this morning) ", remain))
 			}
 		}
 	}
