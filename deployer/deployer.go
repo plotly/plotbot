@@ -490,7 +490,7 @@ func (dep *Deployer) forwardProgress() {
 			lines += "\n"
 		case <-time.After(2 * time.Second):
 			if lines != "" {
-				escapedLines := fmt.Sprintf("```%s```", lines)
+				escapedLines := fmt.Sprintf("```\n%s```", lines)
 				dep.bot.SendToChannel(dep.config.ProgressRoom, escapedLines)
 				lines = ""
 			}
