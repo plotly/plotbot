@@ -9,7 +9,6 @@ import (
 	_ "github.com/plotly/plotbot/deployer"
 	_ "github.com/plotly/plotbot/mooder"
 	_ "github.com/plotly/plotbot/plotberry"
-	_ "github.com/plotly/plotbot/standup"
 )
 
 var configFile = flag.String("config", os.Getenv("HOME")+"/.plotbot", "config file")
