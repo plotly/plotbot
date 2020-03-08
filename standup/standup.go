@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 	"github.com/plotly/plotbot"
 	"github.com/plotly/plotbot/util"
 	levelutil "github.com/syndtr/goleveldb/leveldb/util"

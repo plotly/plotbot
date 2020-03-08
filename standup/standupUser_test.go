@@ -3,7 +3,7 @@ package standup
 import (
 	"testing"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 )
 
 func TestFilterByEmail(t *testing.T) {

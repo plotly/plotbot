@@ -3,7 +3,7 @@ package standup
 import (
 	"strings"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 )
 
 type standupUser struct {
