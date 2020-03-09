@@ -284,16 +284,19 @@ func (bot *Bot) cacheChannels(channels []slack.Channel, groups []slack.Group) {
 
 	for _, group := range groups {
 		bot.Channels[group.ID] = slack.Channel{
-			BaseChannel: group.BaseChannel,
-			Name:        group.Name,
-			IsChannel:   false,
-			Creator:     group.Creator,
-			IsArchived:  group.IsArchived,
-			Members:     group.Members,
-			Topic:       group.Topic,
-			Purpose:     group.Purpose,
-			IsMember:    true,
-			NumMembers:  group.NumMembers,
+			GroupConversation: slack.GroupConversation{
+				Conversation: slack.Conversation{
+					NumMembers: group.NumMembers,
+				},
+				Name:       group.Name,
+				Creator:    group.Creator,
+				IsArchived: group.IsArchived,
+				Members:    group.Members,
+				Topic:      group.Topic,
+				Purpose:    group.Purpose,
+			},
+			IsChannel: false,
+			IsMember:  true,
 		}
 	}
 }
@@ -469,11 +472,10 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 
 	case *slack.ChannelCreatedEvent:
 		bot.Channels[ev.Channel.ID] = slack.Channel{
-			BaseChannel: slack.BaseChannel{
-				Id: ev.Channel.ID,
+			slack.GroupConversation{
+				Name:    ev.Channel.Name,
+				Creator: ev.Channel.Creator,
 			},
-			Name:    ev.Channel.Name,
-			Creator: ev.Channel.Creator,
 		}
 		// NICE: poll the API to get a full Channel object ? many
 		// things are missing here
@@ -500,10 +502,7 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 		bot.Channels[ev.Channel.ID] = ev.Channel
 
 	case *slack.GroupCreatedEvent:
-		bot.Channels[ev.Channel.Id] = slack.Channel{
-			BaseChannel: slack.BaseChannel{
-				Id: ev.Channel.Id,
-			},
+		bot.Channels[ev.Channel.ID] = slack.Channel{
 			Name:    ev.Channel.Name,
 			Creator: ev.Channel.Creator,
 		}
