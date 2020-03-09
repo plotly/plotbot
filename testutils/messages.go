@@ -10,15 +10,14 @@ import (
 var DefaultFromUser = "hodor"
 
 func applyFromUserToMessage(m *plotbot.Message, user string) {
-	m.FromUser.Id = user
+	m.FromUser.ID = user
 	m.FromUser.Name = user
 	m.FromUser.RealName = user
 
-	m.SubMessage.Username = user
-	m.SubMessage.Id = user
+	m.SubMessage.User = user
 
 	m.Username = user
-	m.UserId = user
+	m.User = user
 }
 
 func ToBotMsg(bot plotbot.BotLike, msg string) *plotbot.Message {
@@ -27,9 +26,9 @@ func ToBotMsg(bot plotbot.BotLike, msg string) *plotbot.Message {
 	channelId := "channelId"
 
 	smsg := &slack.Msg{
-		Id:        "abcdef",
-		ChannelId: channelId,
-		Text:      msg,
+		User:    "abcdef",
+		Channel: channelId,
+		Text:    msg,
 	}
 
 	suser := &slack.User{}

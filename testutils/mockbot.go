@@ -38,13 +38,13 @@ func NewMockBot(sconf plotbot.SlackConfig, userconf slack.UserDetails, mood plot
 	}
 
 	defaultuserconf := slack.UserDetails{
-		Id:      "mockbot",
+		ID:      "mockbot",
 		Name:    "mockbot",
 		Created: slack.JSONTime(time.Now().Unix()),
 	}
 
-	if userconf.Id != "" {
-		defaultuserconf.Id = userconf.Id
+	if userconf.ID != "" {
+		defaultuserconf.ID = userconf.ID
 	}
 
 	if userconf.Name != "" {
@@ -132,7 +132,7 @@ func (bot *MockBot) SetMood(mood plotbot.Mood) {
 }
 
 func (bot *MockBot) Id() string {
-	return bot.Myself.Id
+	return bot.Myself.ID
 }
 
 func (bot *MockBot) CloseConversation(conv *plotbot.Conversation) {
