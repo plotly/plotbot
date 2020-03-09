@@ -394,7 +394,7 @@ func (bot *Bot) messageHandler() {
 
 func (bot *Bot) handleRTMEvent(event *slack.RTMEvent) {
 	switch ev := event.Data.(type) {
-	case slack.HelloEvent:
+	case *slack.HelloEvent:
 		fmt.Println("Got a HELLO from websocket")
 
 	case *slack.ConnectedEvent:
