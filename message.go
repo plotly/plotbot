@@ -84,14 +84,14 @@ func (msg *Message) Reply(s string) *BotReply {
 	if msg.Channel != "" {
 		rep.To = msg.Channel
 	} else {
-		rep.To = msg.User
+		rep.To = msg.Username
 	}
 	return rep
 }
 
 func (msg *Message) ReplyPrivately(s string) *BotReply {
 	return &BotReply{
-		To:   msg.User,
+		To:   msg.Username,
 		Text: s,
 	}
 }

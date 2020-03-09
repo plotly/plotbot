@@ -337,8 +337,7 @@ func (bot *Bot) replyHandler() {
 		case reply := <-bot.replySink:
 			if reply != nil {
 				log.Println("REPLYING", reply.To, reply.Text)
-				attachment := []slack.Attachment{{Text: reply.Text}}
-				msgoption := slack.MsgOptionAttachments(attachment...)
+				msgoption := slack.MsgOptionText(reply.Text, true)
 				_, _, err := bot.Slack.PostMessage(reply.To, msgoption)
 				if err != nil {
 					log.Fatalln("REPLY ERROR when sending", reply.Text, "->", err)
