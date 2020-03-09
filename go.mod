@@ -11,7 +11,6 @@ require (
 	github.com/jmcvetta/napping v3.1.2-0.20160715192702-9bfcafb412a9+incompatible
 	github.com/jmcvetta/randutil v0.0.0-20150817122601-2bb1b664bcff // indirect
 	github.com/kr/pty v0.0.0-20160716204620-ce7fa45920dc
-	github.com/nlopes/slack v0.6.0
 	github.com/onsi/ginkgo v1.12.0 // indirect
 	github.com/onsi/gomega v1.9.0 // indirect
 	github.com/slack-go/slack v0.6.3
