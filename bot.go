@@ -262,7 +262,6 @@ func (bot *Bot) connectClient() (err error) {
 
 func (bot *Bot) setupHandlers() {
 	bot.disconnected = make(chan bool)
-	go keepaliveSlackWS(bot.ws)
 	go bot.replyHandler()
 	go bot.messageHandler()
 	log.Println("Bot ready")
@@ -293,18 +292,6 @@ func (bot *Bot) cacheChannels(channels []slack.Channel, groups []slack.Group) {
 			Purpose:     group.Purpose,
 			IsMember:    true,
 			NumMembers:  group.NumMembers,
-		}
-	}
-}
-
-func keepaliveSlackWS(ws *slack.SlackWS) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		<-ticker.C
-		if err := ws.Ping(); err != nil {
-			return
 		}
 	}
 }
