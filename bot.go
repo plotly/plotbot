@@ -206,14 +206,12 @@ func (bot *Bot) ReplyPrivately(msg *Message, reply string) {
 }
 
 func (bot *Bot) Notify(room, color, msg string) {
-	_, _, err := bot.Slack.PostMessage(room, "", slack.PostMessageParameters{
-		Attachments: []slack.Attachment{
-			{
-				Color: color,
-				Text:  msg,
-			},
-		},
-	})
+	attachment := []slack.Attachment{{
+		Color: color,
+		Text:  msg,
+	}}
+	msgoption := slack.MsgOptionAttachments(attachment...)
+	_, _, err := bot.Slack.PostMessage(room, msgoption)
 
 	if err != nil {
 		log.Printf("Notify error: %s\n", err)
@@ -347,9 +345,10 @@ func (bot *Bot) replyHandler() {
 			return
 		case reply := <-bot.replySink:
 			if reply != nil {
-				//log.Println("REPLYING", reply.To, reply.Text)
-				params := slack.PostMessageParameters{}
-				_, _, err := bot.ws.PostMessage(reply.To, reply.Text, params)
+				log.Println("REPLYING", reply.To, reply.Text)
+				attachment := []slack.Attachment{{Text: reply.Text}}
+				msgoption := slack.MsgOptionAttachments(attachment...)
+				_, _, err := bot.Slack.PostMessage(reply.To, msgoption)
 				if err != nil {
 					log.Fatalln("REPLY ERROR when sending", reply.Text, "->", err)
 				}
