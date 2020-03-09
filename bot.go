@@ -447,7 +447,7 @@ func (bot *Bot) handleRTMEvent(event *slack.RTMEvent) {
 	case slack.LatencyReport:
 		break
 	case *slack.IncomingEventError:
-		fmt.Printf("Error: %s\n", ev.Error)
+		fmt.Printf("Error: %s \n", ev.Error())
 
 	// TODO: manage im_open, im_close, and im_created ?
 
