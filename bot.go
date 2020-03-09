@@ -37,8 +37,8 @@ type Bot struct {
 	Config     SlackConfig
 
 	// Slack connectivity
-	Slack    *slack.Slack
-	ws       *slack.SlackWS
+	Slack    *slack.Client
+	ws       *slack.RTM
 	Users    map[string]slack.User
 	Channels map[string]slack.Channel
 	Myself   *slack.UserDetails
@@ -136,8 +136,6 @@ func (bot *Bot) Run() {
 			continue
 		}
 
-		bot.MentionPrefix = fmt.Sprintf("@%s:", bot.Myself.Name)
-
 		bot.setupHandlers()
 
 		select {
@@ -206,14 +204,12 @@ func (bot *Bot) ReplyPrivately(msg *Message, reply string) {
 }
 
 func (bot *Bot) Notify(room, color, msg string) {
-	_, _, err := bot.Slack.PostMessage(room, "", slack.PostMessageParameters{
-		Attachments: []slack.Attachment{
-			{
-				Color: color,
-				Text:  msg,
-			},
-		},
-	})
+	attachment := []slack.Attachment{{
+		Color: color,
+		Text:  msg,
+	}}
+	msgoption := slack.MsgOptionAttachments(attachment...)
+	_, _, err := bot.Slack.PostMessage(room, msgoption)
 
 	if err != nil {
 		log.Printf("Notify error: %s\n", err)
@@ -230,7 +226,7 @@ func (bot *Bot) SendToChannel(channelName string, message string) {
 	log.Printf("Sending to channel %q: %q\n", channelName, message)
 
 	reply := &BotReply{
-		To:   channel.Id,
+		To:   channel.ID,
 		Text: message,
 	}
 	bot.replySink <- reply
@@ -244,25 +240,18 @@ func (bot *Bot) connectClient() (err error) {
 	}
 
 	bot.Slack = slack.New(bot.Config.ApiToken)
-	//bot.Slack.SetDebug(true)
 
-	ws, err := bot.Slack.StartRTM("", "http://safeidentity.slack.com")
+	ws := bot.Slack.NewRTM()
 	if err != nil {
 		return err
 	}
 	bot.ws = ws
-
-	infos := bot.Slack.GetInfo()
-	bot.Myself = infos.User
-	bot.cacheUsers(infos.Users)
-	bot.cacheChannels(infos.Channels, infos.Groups)
-
+	go bot.ws.ManageConnection()
 	return
 }
 
 func (bot *Bot) setupHandlers() {
 	bot.disconnected = make(chan bool)
-	go keepaliveSlackWS(bot.ws)
 	go bot.replyHandler()
 	go bot.messageHandler()
 	log.Println("Bot ready")
@@ -271,40 +260,31 @@ func (bot *Bot) setupHandlers() {
 func (bot *Bot) cacheUsers(users []slack.User) {
 	bot.Users = make(map[string]slack.User)
 	for _, user := range users {
-		bot.Users[user.Id] = user
+		bot.Users[user.ID] = user
 	}
 }
 
 func (bot *Bot) cacheChannels(channels []slack.Channel, groups []slack.Group) {
 	bot.Channels = make(map[string]slack.Channel)
 	for _, channel := range channels {
-		bot.Channels[channel.Id] = channel
+		bot.Channels[channel.ID] = channel
 	}
 
 	for _, group := range groups {
-		bot.Channels[group.Id] = slack.Channel{
-			BaseChannel: group.BaseChannel,
-			Name:        group.Name,
-			IsChannel:   false,
-			Creator:     group.Creator,
-			IsArchived:  group.IsArchived,
-			Members:     group.Members,
-			Topic:       group.Topic,
-			Purpose:     group.Purpose,
-			IsMember:    true,
-			NumMembers:  group.NumMembers,
-		}
-	}
-}
-
-func keepaliveSlackWS(ws *slack.SlackWS) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		<-ticker.C
-		if err := ws.Ping(); err != nil {
-			return
+		bot.Channels[group.ID] = slack.Channel{
+			GroupConversation: slack.GroupConversation{
+				Conversation: slack.Conversation{
+					NumMembers: group.NumMembers,
+				},
+				Name:       group.Name,
+				Creator:    group.Creator,
+				IsArchived: group.IsArchived,
+				Members:    group.Members,
+				Topic:      group.Topic,
+				Purpose:    group.Purpose,
+			},
+			IsChannel: false,
+			IsMember:  true,
 		}
 	}
 }
@@ -356,9 +336,10 @@ func (bot *Bot) replyHandler() {
 			return
 		case reply := <-bot.replySink:
 			if reply != nil {
-				//log.Println("REPLYING", reply.To, reply.Text)
-				params := slack.PostMessageParameters{}
-				_, _, err := bot.ws.PostMessage(reply.To, reply.Text, params)
+				log.Println("REPLYING", reply.To, reply.Text)
+				attachment := []slack.Attachment{{Text: reply.Text}}
+				msgoption := slack.MsgOptionAttachments(attachment...)
+				_, _, err := bot.Slack.PostMessage(reply.To, msgoption)
 				if err != nil {
 					log.Fatalln("REPLY ERROR when sending", reply.Text, "->", err)
 				}
@@ -384,9 +365,6 @@ func (bot *Bot) removeConversation(conv *Conversation) {
 }
 
 func (bot *Bot) messageHandler() {
-	events := make(chan slack.SlackEvent, 10)
-	go bot.ws.HandleIncomingEvents(events)
-
 	for {
 		select {
 		case <-bot.disconnected:
@@ -398,7 +376,7 @@ func (bot *Bot) messageHandler() {
 		case conv := <-bot.delConversationCh:
 			bot.removeConversation(conv)
 
-		case event := <-events:
+		case event := <-bot.ws.IncomingEvents:
 			bot.handleRTMEvent(&event)
 		}
 
@@ -412,10 +390,23 @@ func (bot *Bot) messageHandler() {
 	}
 }
 
-func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
+func (bot *Bot) handleRTMEvent(event *slack.RTMEvent) {
 	switch ev := event.Data.(type) {
-	case slack.HelloEvent:
+	case *slack.HelloEvent:
 		fmt.Println("Got a HELLO from websocket")
+
+	case *slack.ConnectedEvent:
+		fmt.Println("Connected.. Syncing users and channels")
+		info := bot.ws.GetInfo()
+		bot.Myself = info.User
+		bot.MentionPrefix = fmt.Sprintf("@%s:", bot.Myself.Name)
+
+		users, _ := bot.Slack.GetUsers()
+		// true argument excludes archived channels/groups:
+		channels, _ := bot.Slack.GetChannels(true)
+		groups, _ := bot.Slack.GetGroups(true)
+		bot.cacheUsers(users)
+		bot.cacheChannels(channels, groups)
 
 	case *slack.MessageEvent:
 		fmt.Printf("Message: %v\n", ev)
@@ -424,11 +415,11 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 			SubMessage: ev.SubMessage,
 		}
 
-		user, ok := bot.Users[ev.UserId]
+		user, ok := bot.Users[ev.Msg.User]
 		if ok {
 			msg.FromUser = &user
 		}
-		channel, ok := bot.Channels[ev.ChannelId]
+		channel, ok := bot.Channels[ev.Msg.Channel]
 		if ok {
 			msg.FromChannel = &channel
 		}
@@ -450,14 +441,14 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 		}
 
 	case *slack.PresenceChangeEvent:
-		user := bot.Users[ev.UserId]
+		user := bot.Users[ev.User]
 		log.Printf("User %q is now %q\n", user.Name, ev.Presence)
 		user.Presence = ev.Presence
 
 	case slack.LatencyReport:
 		break
-	case *slack.SlackWSError:
-		fmt.Printf("Error: %d - %s\n", ev.Code, ev.Msg)
+	case *slack.IncomingEventError:
+		fmt.Printf("Error: %s \n", ev.Error())
 
 	// TODO: manage im_open, im_close, and im_created ?
 
@@ -465,57 +456,55 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 	 * User changes
 	 */
 	case *slack.UserChangeEvent:
-		bot.Users[ev.User.Id] = ev.User
+		bot.Users[ev.User.ID] = ev.User
 
 	/**
 	 * Handle channel changes
 	 */
 	case *slack.ChannelRenameEvent:
-		channel := bot.Channels[ev.Channel.Id]
+		channel := bot.Channels[ev.Channel.ID]
 		channel.Name = ev.Channel.Name
 
 	case *slack.ChannelJoinedEvent:
-		bot.Channels[ev.Channel.Id] = ev.Channel
+		bot.Channels[ev.Channel.ID] = ev.Channel
 
 	case *slack.ChannelCreatedEvent:
-		bot.Channels[ev.Channel.Id] = slack.Channel{
-			BaseChannel: slack.BaseChannel{
-				Id: ev.Channel.Id,
+		bot.Channels[ev.Channel.ID] = slack.Channel{
+			GroupConversation: slack.GroupConversation{
+				Name:    ev.Channel.Name,
+				Creator: ev.Channel.Creator,
 			},
-			Name:    ev.Channel.Name,
-			Creator: ev.Channel.Creator,
 		}
 		// NICE: poll the API to get a full Channel object ? many
 		// things are missing here
 
 	case *slack.ChannelDeletedEvent:
-		delete(bot.Channels, ev.ChannelId)
+		delete(bot.Channels, ev.Channel)
 
 	case *slack.ChannelArchiveEvent:
-		channel := bot.Channels[ev.ChannelId]
+		channel := bot.Channels[ev.Channel]
 		channel.IsArchived = true
 
 	case *slack.ChannelUnarchiveEvent:
-		channel := bot.Channels[ev.ChannelId]
+		channel := bot.Channels[ev.Channel]
 		channel.IsArchived = false
 
 	/**
 	 * Handle group changes
 	 */
 	case *slack.GroupRenameEvent:
-		group := bot.Channels[ev.Channel.Id]
-		group.Name = ev.Channel.Name
+		group := bot.Channels[ev.Group.Name]
+		group.Name = ev.Group.Name
 
 	case *slack.GroupJoinedEvent:
-		bot.Channels[ev.Channel.Id] = ev.Channel
+		bot.Channels[ev.Channel.ID] = ev.Channel
 
 	case *slack.GroupCreatedEvent:
-		bot.Channels[ev.Channel.Id] = slack.Channel{
-			BaseChannel: slack.BaseChannel{
-				Id: ev.Channel.Id,
+		bot.Channels[ev.Channel.ID] = slack.Channel{
+			GroupConversation: slack.GroupConversation{
+				Name:    ev.Channel.Name,
+				Creator: ev.Channel.Creator,
 			},
-			Name:    ev.Channel.Name,
-			Creator: ev.Channel.Creator,
 		}
 		// NICE: poll the API to get a full Group object ? many
 		// things are missing here
@@ -523,14 +512,14 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 	case *slack.GroupCloseEvent:
 		// TODO: when a group is "closed"... does that mean removed ?
 		// TODO: how do we even manage groups ?!?!
-		delete(bot.Channels, ev.ChannelId)
+		delete(bot.Channels, ev.Channel)
 
 	case *slack.GroupArchiveEvent:
-		group := bot.Channels[ev.ChannelId]
+		group := bot.Channels[ev.Channel]
 		group.IsArchived = true
 
 	case *slack.GroupUnarchiveEvent:
-		group := bot.Channels[ev.ChannelId]
+		group := bot.Channels[ev.Channel]
 		group.IsArchived = false
 
 	default:
@@ -553,7 +542,7 @@ func (bot *Bot) Disconnect() {
 func (bot *Bot) GetUser(find string) *slack.User {
 	for _, user := range bot.Users {
 		//log.Printf("Hmmmm, %#v\n", user)
-		if user.Profile.Email == find || user.Id == find || user.Name == find || user.RealName == find {
+		if user.Profile.Email == find || user.ID == find || user.Name == find || user.RealName == find {
 			return &user
 		}
 	}
@@ -588,5 +577,5 @@ func (bot *Bot) SetMood(mood Mood) {
 }
 
 func (bot *Bot) Id() string {
-	return bot.Myself.Id
+	return bot.Myself.ID
 }
