@@ -252,10 +252,14 @@ func (bot *Bot) connectClient() (err error) {
 	bot.ws = ws
 	go bot.ws.ManageConnection()
 
-	infos := bot.Slack.GetInfo()
-	bot.Myself = infos.User
-	bot.cacheUsers(infos.Users)
-	bot.cacheChannels(infos.Channels, infos.Groups)
+	info := bot.ws.GetInfo()
+	bot.Myself = info.User
+	users, err := bot.Slack.GetUsers()
+	// true argument excludes archived channels/groups:
+	channels, err := bot.Slack.GetChannels(true)
+	groups, err := bot.Slack.GetGroups(true)
+	bot.cacheUsers(users)
+	bot.cacheChannels(channels, groups)
 
 	return
 }
