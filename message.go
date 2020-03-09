@@ -123,7 +123,7 @@ func (msg *Message) AtMentionIfPublic(reply string) string {
 	} else {
 		prefix := ""
 		if msg.FromUser != nil {
-			prefix = fmt.Sprintf("<@%s> ", msg.FromUser.Name)
+			prefix = fmt.Sprintf("<@%s> ", msg.FromUser.RealName)
 		}
 		return fmt.Sprintf("%s%s", prefix, reply)
 	}

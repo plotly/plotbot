@@ -241,7 +241,7 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		}
 	} else if msg.Contains("in the pipe") {
 		url := dep.getCompareUrl("prod", dep.config.Services["streambed"].DefaultBranch, dep.config.Services["streambed"].RepositoryPath)
-		mention := msg.FromUser.Name
+		mention := msg.FromUser.RealName
 		if url != "" {
 			conv.Reply(msg,
 				fmt.Sprintf("@%s in %s branch, waiting to reach prod: %s",
@@ -254,10 +254,10 @@ func (dep *Deployer) ChatHandler(conv *plotbot.Conversation, msg *plotbot.Messag
 		dep.lockedBy = ""
 		conv.Reply(msg, fmt.Sprintf("Deployment is now unlocked."))
 		bot.Notify(dep.config.AnnounceRoom, "#00ff00",
-			fmt.Sprintf("%s has unlocked deployment", msg.FromUser.Name))
+			fmt.Sprintf("%s has unlocked deployment", msg.FromUser.RealName))
 
 	} else if msg.Contains("lock deploy") {
-		dep.lockedBy = msg.FromUser.Name
+		dep.lockedBy = msg.FromUser.RealName
 		conv.Reply(msg, fmt.Sprintf("Deployment is now locked.  "+
 			"Unlock with '%s, unlock deployment' ASAP!", dep.bot.AtMention()))
 		bot.Notify(dep.config.AnnounceRoom, "#ff0000",
