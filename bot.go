@@ -249,16 +249,6 @@ func (bot *Bot) connectClient() (err error) {
 	}
 	bot.ws = ws
 	go bot.ws.ManageConnection()
-
-	info := bot.ws.GetInfo()
-	bot.Myself = info.User
-	users, err := bot.Slack.GetUsers()
-	// true argument excludes archived channels/groups:
-	channels, err := bot.Slack.GetChannels(true)
-	groups, err := bot.Slack.GetGroups(true)
-	bot.cacheUsers(users)
-	bot.cacheChannels(channels, groups)
-
 	return
 }
 
@@ -406,6 +396,17 @@ func (bot *Bot) handleRTMEvent(event *slack.RTMEvent) {
 	switch ev := event.Data.(type) {
 	case slack.HelloEvent:
 		fmt.Println("Got a HELLO from websocket")
+
+	case *slack.ConnectedEvent:
+		fmt.Println("Connected.. Syncing users and channels")
+		info := bot.ws.GetInfo()
+		bot.Myself = info.User
+		users, _ := bot.Slack.GetUsers()
+		// true argument excludes archived channels/groups:
+		channels, _ := bot.Slack.GetChannels(true)
+		groups, _ := bot.Slack.GetGroups(true)
+		bot.cacheUsers(users)
+		bot.cacheChannels(channels, groups)
 
 	case *slack.MessageEvent:
 		fmt.Printf("Message: %v\n", ev)
