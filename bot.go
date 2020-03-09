@@ -136,8 +136,6 @@ func (bot *Bot) Run() {
 			continue
 		}
 
-		bot.MentionPrefix = fmt.Sprintf("@%s:", bot.Myself.Name)
-
 		bot.setupHandlers()
 
 		select {
@@ -401,6 +399,8 @@ func (bot *Bot) handleRTMEvent(event *slack.RTMEvent) {
 		fmt.Println("Connected.. Syncing users and channels")
 		info := bot.ws.GetInfo()
 		bot.Myself = info.User
+		bot.MentionPrefix = fmt.Sprintf("@%s:", bot.Myself.Name)
+
 		users, _ := bot.Slack.GetUsers()
 		// true argument excludes archived channels/groups:
 		channels, _ := bot.Slack.GetChannels(true)
