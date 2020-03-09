@@ -377,9 +377,6 @@ func (bot *Bot) removeConversation(conv *Conversation) {
 }
 
 func (bot *Bot) messageHandler() {
-	events := make(chan slack.SlackEvent, 10)
-	go bot.ws.HandleIncomingEvents(events)
-
 	for {
 		select {
 		case <-bot.disconnected:
@@ -391,7 +388,7 @@ func (bot *Bot) messageHandler() {
 		case conv := <-bot.delConversationCh:
 			bot.removeConversation(conv)
 
-		case event := <-events:
+		case event := <-bot.ws.IncomingEvents:
 			bot.handleRTMEvent(&event)
 		}
 
@@ -405,7 +402,7 @@ func (bot *Bot) messageHandler() {
 	}
 }
 
-func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
+func (bot *Bot) handleRTMEvent(event *slack.RTMEvent) {
 	switch ev := event.Data.(type) {
 	case slack.HelloEvent:
 		fmt.Println("Got a HELLO from websocket")
@@ -449,8 +446,8 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 
 	case slack.LatencyReport:
 		break
-	case *slack.SlackWSError:
-		fmt.Printf("Error: %d - %s\n", ev.Code, ev.Msg)
+	case *slack.IncomingEventError:
+		fmt.Printf("Error: %s\n", ev.Error)
 
 	// TODO: manage im_open, im_close, and im_created ?
 
