@@ -417,11 +417,11 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 			SubMessage: ev.SubMessage,
 		}
 
-		user, ok := bot.Users[ev.UserId]
+		user, ok := bot.Users[ev.Msg.User]
 		if ok {
 			msg.FromUser = &user
 		}
-		channel, ok := bot.Channels[ev.ChannelId]
+		channel, ok := bot.Channels[ev.Msg.Channel]
 		if ok {
 			msg.FromChannel = &channel
 		}
@@ -443,7 +443,7 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 		}
 
 	case *slack.PresenceChangeEvent:
-		user := bot.Users[ev.UserId]
+		user := bot.Users[ev.User]
 		log.Printf("User %q is now %q\n", user.Name, ev.Presence)
 		user.Presence = ev.Presence
 
@@ -468,11 +468,11 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 		channel.Name = ev.Channel.Name
 
 	case *slack.ChannelJoinedEvent:
-		bot.Channels[ev.Channel.Id] = ev.Channel
+		bot.Channels[ev.Channel.ID] = ev.Channel
 
 	case *slack.ChannelCreatedEvent:
 		bot.Channels[ev.Channel.ID] = slack.Channel{
-			slack.GroupConversation{
+			GroupConversation: slack.GroupConversation{
 				Name:    ev.Channel.Name,
 				Creator: ev.Channel.Creator,
 			},
@@ -481,30 +481,32 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 		// things are missing here
 
 	case *slack.ChannelDeletedEvent:
-		delete(bot.Channels, ev.ChannelId)
+		delete(bot.Channels, ev.Channel)
 
 	case *slack.ChannelArchiveEvent:
-		channel := bot.Channels[ev.ChannelId]
+		channel := bot.Channels[ev.Channel]
 		channel.IsArchived = true
 
 	case *slack.ChannelUnarchiveEvent:
-		channel := bot.Channels[ev.ChannelId]
+		channel := bot.Channels[ev.Channel]
 		channel.IsArchived = false
 
 	/**
 	 * Handle group changes
 	 */
 	case *slack.GroupRenameEvent:
-		group := bot.Channels[ev.Channel.ID]
-		group.Name = ev.Channel.Name
+		group := bot.Channels[ev.Group.Name]
+		group.Name = ev.Group.Name
 
 	case *slack.GroupJoinedEvent:
 		bot.Channels[ev.Channel.ID] = ev.Channel
 
 	case *slack.GroupCreatedEvent:
 		bot.Channels[ev.Channel.ID] = slack.Channel{
-			Name:    ev.Channel.Name,
-			Creator: ev.Channel.Creator,
+			GroupConversation: slack.GroupConversation{
+				Name:    ev.Channel.Name,
+				Creator: ev.Channel.Creator,
+			},
 		}
 		// NICE: poll the API to get a full Group object ? many
 		// things are missing here
@@ -512,14 +514,14 @@ func (bot *Bot) handleRTMEvent(event *slack.SlackEvent) {
 	case *slack.GroupCloseEvent:
 		// TODO: when a group is "closed"... does that mean removed ?
 		// TODO: how do we even manage groups ?!?!
-		delete(bot.Channels, ev.ChannelId)
+		delete(bot.Channels, ev.Channel)
 
 	case *slack.GroupArchiveEvent:
-		group := bot.Channels[ev.ChannelId]
+		group := bot.Channels[ev.Channel]
 		group.IsArchived = true
 
 	case *slack.GroupUnarchiveEvent:
-		group := bot.Channels[ev.ChannelId]
+		group := bot.Channels[ev.Channel]
 		group.IsArchived = false
 
 	default:
