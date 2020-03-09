@@ -37,8 +37,8 @@ type Bot struct {
 	Config     SlackConfig
 
 	// Slack connectivity
-	Slack    *slack.Slack
-	ws       *slack.SlackWS
+	Slack    *slack.Client
+	ws       *slack.RTM
 	Users    map[string]slack.User
 	Channels map[string]slack.Channel
 	Myself   *slack.UserDetails
@@ -244,13 +244,13 @@ func (bot *Bot) connectClient() (err error) {
 	}
 
 	bot.Slack = slack.New(bot.Config.ApiToken)
-	//bot.Slack.SetDebug(true)
 
-	ws, err := bot.Slack.StartRTM("", "http://safeidentity.slack.com")
+	ws := bot.Slack.NewRTM()
 	if err != nil {
 		return err
 	}
 	bot.ws = ws
+	go bot.ws.ManageConnection()
 
 	infos := bot.Slack.GetInfo()
 	bot.Myself = infos.User
